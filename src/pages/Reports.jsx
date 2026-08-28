@@ -1,15 +1,5 @@
-function Reports() {
-  return (
-    <div>
-      <h1 className="text-3xl font-bold text-slate-900">
-        Reports
-      </h1>
-
-      <p className="mt-2 text-slate-500">
-        View business reports and analytics.
-      </p>
-    </div>
-  )
-}
-
+import { BarChart3, Download, TrendingUp } from "lucide-react"
+import { useState } from "react"
+import { Button, PageHeader, cardClass } from "../components/BusinessUI"
+function Reports() { const [period, setPeriod] = useState("30 Days"); const reports = [{ label: "Sales", value: "₱12,450", note: "+12.5%" }, { label: "BuzzPoints Collected", value: "3,200 BP", note: "+8.2%" }, { label: "Customers", value: "248", note: "+18 this period" }, { label: "Transactions", value: "1,284", note: "+6.4%" }]; return <div className="mx-auto max-w-[1600px]"><PageHeader eyebrow="ANALYTICS" title="Reports" description="Review business performance across sales, BuzzPoints, and operations." action={<Button secondary><Download size={17} />Export CSV</Button>} /><div className="mb-6 flex gap-2 overflow-auto">{["7 Days", "30 Days", "90 Days", "This Year"].map((item) => <button key={item} onClick={() => setPeriod(item)} className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold ${period === item ? "bg-[#F5C400] text-black" : "bg-[#191919] text-[#777]"}`}>{item}</button>)}</div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{reports.map((report) => <div className={cardClass} key={report.label}><p className="text-sm text-[#777]">{report.label}</p><p className="mt-3 text-2xl font-bold text-white">{report.value}</p><p className="mt-2 text-xs text-[#F5C400]">{report.note}</p></div>)}</div><div className={`${cardClass} mt-6`}><div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold text-white">Performance overview</h2><p className="mt-1 text-sm text-[#666]">{period} activity across your business</p></div><TrendingUp className="text-[#F5C400]" /></div><div className="mt-8 flex h-56 items-end gap-3">{[38, 52, 44, 68, 55, 76, 62, 84, 72, 91, 79, 96].map((height, index) => <div className="flex-1 rounded-t-lg bg-[#F5C400]/25 hover:bg-[#F5C400]" style={{ height: `${height}%` }} key={index} />)}</div></div><div className="mt-6 grid gap-4 md:grid-cols-3"><div className={cardClass}><BarChart3 className="mb-3 text-[#F5C400]" size={19} /><p className="font-semibold text-white">Products</p><p className="mt-1 text-sm text-[#777]">Top-selling catalog items</p></div><div className={cardClass}><BarChart3 className="mb-3 text-[#F5C400]" size={19} /><p className="font-semibold text-white">Workstations</p><p className="mt-1 text-sm text-[#777]">Utilization and sessions</p></div><div className={cardClass}><BarChart3 className="mb-3 text-[#F5C400]" size={19} /><p className="font-semibold text-white">Promotions</p><p className="mt-1 text-sm text-[#777]">Rewards issued and redeemed</p></div></div></div> }
 export default Reports

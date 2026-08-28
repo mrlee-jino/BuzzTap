@@ -1,5 +1,5 @@
-import { useState } from "react"
 import { NavLink } from "react-router-dom"
+import { useState } from "react"
 import {
   LayoutDashboard,
   Monitor,
@@ -9,15 +9,15 @@ import {
   Package,
   BarChart3,
   Settings,
-  Menu,
+  WalletCards,
   ChevronRight,
+  LogOut,
+  Megaphone,
 } from "lucide-react"
+import { Modal } from "./BusinessUI"
 
-function Sidebar() {
-  const [isPinned, setIsPinned] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-
-  const isExpanded = isPinned || isHovered
+function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
   const menuItems = [
     {
@@ -56,6 +56,16 @@ function Sidebar() {
       icon: BarChart3,
     },
     {
+      name: "BuzzPoint Wallet",
+      path: "/wallet",
+      icon: WalletCards,
+    },
+    {
+      name: "Content",
+      path: "/content",
+      icon: Megaphone,
+    },
+    {
       name: "Settings",
       path: "/settings",
       icon: Settings,
@@ -63,9 +73,10 @@ function Sidebar() {
   ]
 
   return (
+    <>
     <aside
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => setSidebarOpen(true)}
+      onMouseLeave={() => setSidebarOpen(false)}
       className={`
         fixed left-0 top-0 z-50
         h-screen
@@ -73,12 +84,12 @@ function Sidebar() {
         border-r border-[#242424]
         shadow-[8px_0_30px_rgba(0,0,0,0.35)]
         transition-all duration-300 ease-out
-        ${isExpanded ? "w-64" : "w-[76px]"}
+        ${sidebarOpen ? "w-64" : "w-[76px]"}
       `}
     >
       {/* Toggle button */}
       <button
-        onClick={() => setIsPinned(!isPinned)}
+        onClick={() => setSidebarOpen(!sidebarOpen)}
         className="
           absolute -right-4 top-8
           flex h-8 w-8 items-center justify-center
@@ -90,13 +101,13 @@ function Sidebar() {
           hover:scale-110
           hover:bg-[#FFD83D]
         "
-        title={isPinned ? "Collapse sidebar" : "Keep sidebar open"}
+        title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
       >
         <ChevronRight
           size={17}
           className={`
             transition-transform duration-300
-            ${isExpanded ? "rotate-180" : ""}
+            ${sidebarOpen ? "rotate-180" : ""}
           `}
         />
       </button>
@@ -122,7 +133,7 @@ function Sidebar() {
               overflow-hidden whitespace-nowrap
               transition-all duration-300
               ${
-                isExpanded
+                sidebarOpen
                   ? "max-w-[160px] opacity-100 translate-x-0"
                   : "max-w-0 opacity-0 -translate-x-2"
               }
@@ -147,7 +158,7 @@ function Sidebar() {
               text-[10px] font-semibold uppercase tracking-[0.2em]
               text-[#666]
               transition-opacity duration-300
-              ${isExpanded ? "opacity-100" : "opacity-0"}
+              ${sidebarOpen ? "opacity-100" : "opacity-0"}
             `}
           >
             Main Menu
@@ -162,7 +173,7 @@ function Sidebar() {
               <NavLink
                 key={item.name}
                 to={item.path}
-                title={!isExpanded ? item.name : ""}
+                title={!sidebarOpen ? item.name : ""}
                 className={({ isActive }) =>
                   `
                   group relative flex h-12 items-center
@@ -206,7 +217,7 @@ function Sidebar() {
                         ml-4 whitespace-nowrap text-sm font-medium
                         transition-all duration-300
                         ${
-                          isExpanded
+                          sidebarOpen
                             ? "max-w-[180px] opacity-100 translate-x-0"
                             : "max-w-0 opacity-0 -translate-x-3"
                         }
@@ -231,7 +242,7 @@ function Sidebar() {
           p-3
           transition-all duration-300
           ${
-            isExpanded
+            sidebarOpen
               ? "opacity-100 translate-y-0"
               : "opacity-0 translate-y-3 pointer-events-none"
           }
@@ -244,8 +255,13 @@ function Sidebar() {
             System Online
           </span>
         </div>
+        <button onClick={() => setConfirmLogout(true)} className="mt-3 flex w-full items-center gap-2 text-xs text-[#777] hover:text-white" title="Log out">
+          <LogOut size={14} /> Log out
+        </button>
       </div>
     </aside>
+    {confirmLogout && <Modal title="Log out of BuzzTap?" onClose={() => setConfirmLogout(false)}><p className="text-sm text-[#888]">Your prototype session will be cleared and you will return to the login page.</p><div className="mt-6 flex justify-end gap-3"><button onClick={() => setConfirmLogout(false)} className="rounded-xl border border-[#333] px-4 py-3 text-sm text-white">Cancel</button><button onClick={onLogout} className="rounded-xl bg-[#F5C400] px-4 py-3 text-sm font-semibold text-black">Log out</button></div></Modal>}
+    </>
   )
 }
 

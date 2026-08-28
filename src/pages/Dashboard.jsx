@@ -1,4 +1,10 @@
+import { Activity, Coins, Users, WalletCards } from "lucide-react"
+import { useBusiness } from "../businessContext"
+import { Status, cardClass } from "../components/BusinessUI"
+
 function Dashboard() {
+  const { wallet, customers, activities } = useBusiness()
+  const available = wallet.purchased - wallet.distributed
   const stats = [
     {
       label: "Today's Sales",
@@ -20,6 +26,11 @@ function Dashboard() {
       value: "14 / 16",
       description: "87.5% availability",
     },
+    {
+      label: "Available BP",
+      value: available.toLocaleString(),
+      description: "Business allocation",
+    },
   ]
 
   return (
@@ -40,7 +51,7 @@ function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -69,6 +80,12 @@ function Dashboard() {
             </p>
           </div>
         ))}
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
+        <div className={cardClass}><div className="flex items-center gap-3"><Coins className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">BuzzPoints Collected</p><p className="mt-1 text-2xl font-bold text-white">{wallet.collected.toLocaleString()} BP</p></div></div></div>
+        <div className={cardClass}><div className="flex items-center gap-3"><Users className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Active Customers</p><p className="mt-1 text-2xl font-bold text-white">{customers.length}</p></div></div></div>
+        <div className={cardClass}><div className="flex items-center gap-3"><WalletCards className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Pending Settlement</p><p className="mt-1 text-2xl font-bold text-white">{wallet.pendingSettlement.toLocaleString()} BP</p></div></div></div>
       </div>
 
       {/* Lower dashboard */}
@@ -141,6 +158,11 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      <section className={`${cardClass} mt-6`}>
+        <div className="flex items-center gap-3"><Activity size={19} className="text-[#F5C400]" /><div><h2 className="text-lg font-semibold text-white">Recent activity</h2><p className="text-sm text-[#666]">Latest business events and ledger changes</p></div></div>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">{activities.slice(0, 3).map((item) => <div className="border-t border-[#242424] pt-3" key={item.reference}><p className="text-sm text-white">{item.action}</p><p className="mt-1 text-xs text-[#777]">{item.target} · {item.timestamp}</p><Status>{item.reference}</Status></div>)}</div>
+      </section>
     </div>
   )
 }

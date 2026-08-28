@@ -1,15 +1,6 @@
-function ProductsServices() {
-  return (
-    <div>
-      <h1 className="text-3xl font-bold text-slate-900">
-        Products & Services
-      </h1>
-
-      <p className="mt-2 text-slate-500">
-        Manage products and services.
-      </p>
-    </div>
-  )
-}
-
+import { useState } from "react"
+import { Package, Plus, Search, ToggleLeft } from "lucide-react"
+import { useBusiness } from "../businessContext"
+import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
+function ProductsServices() { const { products, addProduct, updateProductStatus } = useBusiness(); const [query, setQuery] = useState(""); const [modal, setModal] = useState(false); const [notice, setNotice] = useState(""); const visible = products.filter((item) => `${item.id} ${item.name} ${item.category}`.toLowerCase().includes(query.toLowerCase())); const add = (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget)); const ok = addProduct({ ...data, price: Number(data.price) }); setNotice(ok ? "Product added successfully." : "Product ID already exists."); if (ok) setModal(false) }; return <div className="mx-auto max-w-[1600px]"><PageHeader title="Products & Services" description="Manage your catalog, prices, availability, and categories." action={<Button onClick={() => setModal(true)}><Plus size={17} />Add Product</Button>} />{notice && <p className="mb-5 rounded-xl border border-[#F5C400]/30 bg-[#F5C400]/10 p-3 text-sm text-[#F5C400]">{notice}</p>}<div className={`${cardClass} mb-6 flex items-center gap-3 p-4`}><Search size={17} className="text-[#666]" /><input className={`${inputClass} border-0 p-0`} placeholder="Search product, category, or ID" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{visible.length ? visible.map((product) => <div className={cardClass} key={product.id}><div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F5C400]/10 text-[#F5C400]"><Package size={21} /></div><Status>{product.status}</Status></div><p className="mt-6 text-xs text-[#666]">{product.id} · {product.category}</p><h2 className="mt-2 text-xl font-semibold text-white">{product.name}</h2><p className="mt-2 text-sm text-[#777]">{product.description}</p><div className="mt-6 flex items-center justify-between border-t border-[#242424] pt-4"><span className="text-xl font-bold text-[#F5C400]">{product.price} BP</span><button title="Toggle availability" onClick={() => updateProductStatus(product.id, product.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")} className="rounded-lg p-2 text-[#777] hover:bg-[#222] hover:text-white"><ToggleLeft size={20} /></button></div></div>) : <div className={`${cardClass} text-center text-sm text-[#666]`}>No products found.</div>}</div>{modal && <Modal title="Add Product" onClose={() => setModal(false)}><form onSubmit={add} className="space-y-4"><Field label="Product ID"><input className={inputClass} name="id" required placeholder="PROD-004" /></Field><Field label="Product Name"><input className={inputClass} name="name" required placeholder="Gaming Session - 1 Hour" /></Field><Field label="Description"><textarea className={inputClass} name="description" required rows="2" /></Field><Field label="Category"><input className={inputClass} name="category" required placeholder="Gaming" /></Field><Field label="Price"><input className={inputClass} name="price" type="number" min="0" required placeholder="50" /></Field><Button type="submit">Add Product</Button></form></Modal>}</div> }
 export default ProductsServices
