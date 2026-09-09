@@ -35,9 +35,9 @@ const initialWorkstations = [
 ]
 
 const initialStaff = [
-  { id: "STAFF-001", name: "Jordan Reyes", email: "owner@cyberhub.example", role: "OWNER", status: "ACTIVE" },
-  { id: "STAFF-002", name: "Mika Cruz", email: "mika@cyberhub.example", role: "MANAGER", status: "SUSPENDED" },
-  { id: "STAFF-003", name: "Leo Tan", email: "leo@cyberhub.example", role: "CASHIER", status: "INVITED" },
+  { id: "STAFF-001", businessName: "CyberHub Gaming Station", name: "Jordan Reyes", email: "owner@cyberhub.example", password: "prototype", role: "OWNER", status: "ACTIVE" },
+  { id: "STAFF-002", businessName: "CyberHub Gaming Station", name: "Mika Cruz", email: "mika@cyberhub.example", password: "prototype", role: "MANAGER", status: "SUSPENDED" },
+  { id: "STAFF-003", businessName: "CyberHub Gaming Station", name: "Leo Tan", email: "leo@cyberhub.example", password: "prototype", role: "CASHIER", status: "INVITED" },
 ]
 
 export function BusinessProvider({ children }) {
@@ -100,7 +100,20 @@ export function BusinessProvider({ children }) {
   const updateProductStatus = (id, status) => { setProducts((current) => current.map((item) => item.id === id ? { ...item, status } : item)); log(`Product status changed to ${status}`, id) }
   const addWorkstation = (station) => { if (workstations.some((item) => item.id === station.id)) return false; setWorkstations((current) => [...current, { ...station, status: station.status || "ACTIVE" }]); log("Workstation created", station.name, station.id); return true }
   const updateWorkstationStatus = (id, status) => { setWorkstations((current) => current.map((item) => item.id === id ? { ...item, status } : item)); log(`Workstation status changed to ${status}`, id) }
-  const addStaff = (member) => { if (staff.some((item) => item.email === member.email)) return false; const id = `STAFF-${String(staff.length + 1).padStart(3, "0")}`; setStaff((current) => [...current, { ...member, id, status: member.status || "SUSPENDED" }]); log("Staff account created", member.name, id); return true }
+  const addStaff = (member) => {
+    if (staff.some((item) => item.email === member.email)) return false
+    const safeMember = {
+      ...member,
+      businessName: member.businessName || "CyberHub Gaming Station",
+      password: member.password || "prototype",
+      role: member.role || "STAFF",
+      status: member.status || "ACTIVE",
+    }
+    const id = `STAFF-${String(staff.length + 1).padStart(3, "0")}`
+    setStaff((current) => [...current, { ...safeMember, id }])
+    log("Staff account created", safeMember.name, id)
+    return true
+  }
   const updateStaffStatus = (id, status) => { setStaff((current) => current.map((item) => item.id === id ? { ...item, status } : item)); log(`Staff status changed to ${status}`, id) }
 
   return <BusinessContext.Provider value={{ business: { id: "BUS-001", name: "CyberHub Gaming Station" }, customers, transactions, activities, wallet, purchaseRequests, settlementRequests, cards, products, workstations, staff, loadPoints, purchase, refund, addActivity, addCustomer, updateCustomerStatus, addCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, requestPurchase: (request) => setPurchaseRequests((current) => [{ ...request, status: "PENDING", id: `BP-${current.length + 1}` }, ...current]), requestSettlement: (request) => setSettlementRequests((current) => [{ ...request, status: "PENDING", id: `SET-${current.length + 1}` }, ...current]) }}>{children}</BusinessContext.Provider>
