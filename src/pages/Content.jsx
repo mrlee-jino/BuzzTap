@@ -4,7 +4,7 @@ import { useBusiness } from "../businessContext"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 const initialContent = [
-  { contentId: "CNT-001", businessId: "BUS-001", businessName: "CyberHub Gaming Station", type: "PROMOTION", title: "Weekend Gaming Bonus", description: "Play for 3 hours and receive 100 BP.", mediaUrl: "", callToAction: "View Promotion", startDate: "2026-08-30", endDate: "2026-09-05", status: "PUBLISHED", createdAt: "Aug 20, 2026", updatedAt: "Aug 20, 2026" },
+  { contentId: "CNT-001", businessId: "BUS-001", businessName: "CyberHub Gaming Station", type: "PROMOTION", title: "Weekend Gaming Bonus", description: "Play for 3 hours and receive 100 Customized Buzz Points.", mediaUrl: "", callToAction: "View Promotion", startDate: "2026-08-30", endDate: "2026-09-05", status: "PUBLISHED", createdAt: "Aug 20, 2026", updatedAt: "Aug 20, 2026" },
   { contentId: "CNT-002", businessId: "BUS-001", businessName: "CyberHub Gaming Station", type: "UPDATE", title: "New Gaming PCs Available", description: "We just upgraded our gaming stations.", mediaUrl: "", callToAction: "Visit CyberHub", startDate: "2026-08-28", endDate: "2026-09-30", status: "PENDING_REVIEW", createdAt: "Aug 27, 2026", updatedAt: "Aug 27, 2026" },
   { contentId: "CNT-003", businessId: "BUS-001", businessName: "CyberHub Gaming Station", type: "EVENT", title: "CyberHub Gaming Tournament", description: "Compete for prizes with the community.", mediaUrl: "", callToAction: "Register", startDate: "2026-09-15", endDate: "2026-09-15", status: "DRAFT", createdAt: "Aug 28, 2026", updatedAt: "Aug 28, 2026" },
 ]

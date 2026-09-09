@@ -27,7 +27,7 @@ function Dashboard() {
       description: "87.5% availability",
     },
     {
-      label: "Available BP",
+      label: "Available Customized Buzz Points",
       value: available.toLocaleString(),
       description: "Business allocation",
     },
@@ -83,9 +83,9 @@ function Dashboard() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
-        <div className={cardClass}><div className="flex items-center gap-3"><Coins className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">BuzzPoints Collected</p><p className="mt-1 text-2xl font-bold text-white">{wallet.collected.toLocaleString()} BP</p></div></div></div>
+        <div className={cardClass}><div className="flex items-center gap-3"><Coins className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Customized Buzz Points Collected</p><p className="mt-1 text-2xl font-bold text-white">{wallet.collected.toLocaleString()} Customized Buzz Points</p></div></div></div>
         <div className={cardClass}><div className="flex items-center gap-3"><Users className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Active Customers</p><p className="mt-1 text-2xl font-bold text-white">{customers.length}</p></div></div></div>
-        <div className={cardClass}><div className="flex items-center gap-3"><WalletCards className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Pending Settlement</p><p className="mt-1 text-2xl font-bold text-white">{wallet.pendingSettlement.toLocaleString()} BP</p></div></div></div>
+        <div className={cardClass}><div className="flex items-center gap-3"><WalletCards className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Pending Settlement</p><p className="mt-1 text-2xl font-bold text-white">{wallet.pendingSettlement.toLocaleString()} Customized Buzz Points</p></div></div></div>
       </div>
 
       {/* Lower dashboard */}

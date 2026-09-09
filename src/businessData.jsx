@@ -23,9 +23,9 @@ const initialCards = [
 ]
 
 const initialProducts = [
-  { id: "PROD-001", name: "Gaming Hour", description: "One hour workstation access", category: "Gaming", price: 100, status: "ACTIVE" },
-  { id: "PROD-002", name: "Energy Drink", description: "Cold 330ml can", category: "Refreshments", price: 50, status: "ACTIVE" },
-  { id: "PROD-003", name: "Premium Headset", description: "Rental per session", category: "Equipment", price: 75, status: "OUT_OF_STOCK" },
+  { id: "PROD-001", name: "Gaming Hour", description: "One hour workstation access", category: "Gaming", price: 100, stock: 48, reorderLevel: 8, status: "ACTIVE" },
+  { id: "PROD-002", name: "Energy Drink", description: "Cold 330ml can", category: "Refreshments", price: 50, stock: 22, reorderLevel: 6, status: "ACTIVE" },
+  { id: "PROD-003", name: "Premium Headset", description: "Rental per session", category: "Equipment", price: 75, stock: 0, reorderLevel: 4, status: "OUT_OF_STOCK" },
 ]
 
 const initialWorkstations = [
@@ -44,8 +44,8 @@ export function BusinessProvider({ children }) {
   const [customers, setCustomers] = useState(initialCustomers)
   const [transactions, setTransactions] = useState(initialTransactions)
   const [activities, setActivities] = useState([
-    { action: "Customer purchased 150 BP", target: "Juan Dela Cruz", timestamp: "Today, 10:42 AM", reference: "TXN-1048" },
-    { action: "Customer loaded 500 BP", target: "Maria Santos", timestamp: "Today, 09:18 AM", reference: "TXN-1047" },
+    { action: "Customer purchased 150 Customized Buzz Points", target: "Juan Dela Cruz", timestamp: "Today, 10:42 AM", reference: "TXN-1048" },
+    { action: "Customer loaded 500 Customized Buzz Points", target: "Maria Santos", timestamp: "Today, 09:18 AM", reference: "TXN-1047" },
     { action: "NFC card registered", target: "NFC-1003", timestamp: "Yesterday, 02:40 PM", reference: "CARD-1003" },
   ])
   const [wallet, setWallet] = useState({ purchased: 10000, distributed: 6000, collected: 3200, pendingSettlement: 500, settled: 2700 })
@@ -58,6 +58,11 @@ export function BusinessProvider({ children }) {
 
   const addActivity = (action, target, reference) => setActivities((current) => [{ action, target, reference, timestamp: "Just now" }, ...current])
 
+  const authenticateStaff = (businessName, user, password) => {
+    if (!businessName || !user || !password) return null
+    return staff.find((member) => member.status === "ACTIVE" && member.businessName.toLowerCase() === businessName.trim().toLowerCase() && (member.name.toLowerCase() === user.trim().toLowerCase() || member.email.toLowerCase() === user.trim().toLowerCase()) && member.password === password)
+  }
+
   const loadPoints = (customerId, amount) => {
     if (amount <= 0 || amount > wallet.purchased - wallet.distributed) return false
     const customer = customers.find((item) => item.id === customerId)
@@ -65,7 +70,7 @@ export function BusinessProvider({ children }) {
     setWallet((current) => ({ ...current, distributed: current.distributed + amount }))
     const id = `TXN-${1050 + transactions.length}`
     setTransactions((current) => [{ id, type: "CUSTOMER_LOAD", customer: customer.name, card: customer.card || "-", workstation: "-", amount, status: "COMPLETED", date: "Just now" }, ...current])
-    addActivity(`Customer loaded ${amount.toLocaleString()} BP`, customer.name, id)
+    addActivity(`Customer loaded ${amount.toLocaleString()} Customized Buzz Points`, customer.name, id)
     return true
   }
 
@@ -76,7 +81,7 @@ export function BusinessProvider({ children }) {
     setCustomers((current) => current.map((item) => item.id === customerId ? { ...item, wallet: item.wallet - amount } : item))
     setWallet((current) => ({ ...current, collected: current.collected + amount }))
     setTransactions((current) => [{ id, type: "CUSTOMER_PURCHASE", customer: customer.name, card: customer.card || "-", workstation: "-", amount, status: "COMPLETED", date: "Just now", product }, ...current])
-    addActivity(`Customer purchased ${amount.toLocaleString()} BP`, customer.name, id)
+    addActivity(`Customer purchased ${amount.toLocaleString()} Customized Buzz Points`, customer.name, id)
     return true
   }
 
@@ -86,7 +91,7 @@ export function BusinessProvider({ children }) {
     if (customer) setCustomers((current) => current.map((item) => item.id === customer.id ? { ...item, wallet: item.wallet + transaction.amount } : item))
     setWallet((current) => ({ ...current, collected: Math.max(0, current.collected - transaction.amount) }))
     setTransactions((current) => current.map((item) => item.id === transaction.id ? { ...item, status: "REFUNDED" } : item).concat({ ...transaction, id: `REF-${transaction.id}`, type: "REFUND", status: "REFUNDED", date: "Just now" }))
-    addActivity(`Refunded ${transaction.amount.toLocaleString()} BP`, transaction.customer, `REF-${transaction.id}`)
+    addActivity(`Refunded ${transaction.amount.toLocaleString()} Customized Buzz Points`, transaction.customer, `REF-${transaction.id}`)
     return true
   }
 
@@ -116,5 +121,18 @@ export function BusinessProvider({ children }) {
   }
   const updateStaffStatus = (id, status) => { setStaff((current) => current.map((item) => item.id === id ? { ...item, status } : item)); log(`Staff status changed to ${status}`, id) }
 
-  return <BusinessContext.Provider value={{ business: { id: "BUS-001", name: "CyberHub Gaming Station" }, customers, transactions, activities, wallet, purchaseRequests, settlementRequests, cards, products, workstations, staff, loadPoints, purchase, refund, addActivity, addCustomer, updateCustomerStatus, addCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, requestPurchase: (request) => setPurchaseRequests((current) => [{ ...request, status: "PENDING", id: `BP-${current.length + 1}` }, ...current]), requestSettlement: (request) => setSettlementRequests((current) => [{ ...request, status: "PENDING", id: `SET-${current.length + 1}` }, ...current]) }}>{children}</BusinessContext.Provider>
+  const purchaseInventory = (productId, quantity, actorName = "Staff") => {
+    if (!Number.isFinite(quantity) || quantity <= 0) return false
+    const product = products.find((item) => item.id === productId)
+    if (!product) return false
+
+    const nextStock = Math.max(0, product.stock - quantity)
+    setProducts((current) => current.map((item) => item.id === productId ? { ...item, stock: nextStock, status: nextStock === 0 ? "OUT_OF_STOCK" : "ACTIVE" } : item))
+    const id = `TXN-${1050 + transactions.length}`
+    setTransactions((current) => [{ id, type: "STAFF_PURCHASE", customer: actorName, card: "-", workstation: "-", amount: product.price * quantity, status: "COMPLETED", date: "Just now", product: product.name }, ...current])
+    addActivity(`${actorName} purchased ${quantity} ${product.name} item(s)`, product.name, id)
+    return true
+  }
+
+  return <BusinessContext.Provider value={{ business: { id: "BUS-001", name: "CyberHub Gaming Station" }, customers, transactions, activities, wallet, purchaseRequests, settlementRequests, cards, products, workstations, staff, authenticateStaff, loadPoints, purchase, refund, addActivity, addCustomer, updateCustomerStatus, addCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, purchaseInventory, requestPurchase: (request) => setPurchaseRequests((current) => [{ ...request, status: "PENDING", id: `BP-${current.length + 1}` }, ...current]), requestSettlement: (request) => setSettlementRequests((current) => [{ ...request, status: "PENDING", id: `SET-${current.length + 1}` }, ...current]) }}>{children}</BusinessContext.Provider>
 }

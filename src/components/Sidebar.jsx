@@ -31,11 +31,6 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       icon: Monitor,
     },
     {
-      name: "NFC Cards",
-      path: "/nfc-cards",
-      icon: CreditCard,
-    },
-    {
       name: "Transactions",
       path: "/transactions",
       icon: Receipt,
@@ -56,7 +51,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       icon: BarChart3,
     },
     {
-      name: "BuzzPoint Wallet",
+      name: "Customized Buzz Points Wallet",
       path: "/wallet",
       icon: WalletCards,
     },
