@@ -8,23 +8,23 @@ function Dashboard() {
   const stats = [
     {
       label: "Today's Sales",
-      value: "₱12,450",
-      description: "+12.5% from yesterday",
+      value: "—",
+      description: "Awaiting business data",
     },
     {
       label: "Transactions",
-      value: "128",
-      description: "+8.2% from yesterday",
+      value: "—",
+      description: "Awaiting business data",
     },
     {
       label: "Active NFC Cards",
-      value: "76",
-      description: "4 cards added today",
+      value: "—",
+      description: "Awaiting business data",
     },
     {
       label: "Active Stations",
-      value: "14 / 16",
-      description: "87.5% availability",
+      value: "—",
+      description: "Awaiting business data",
     },
     {
       label: "Available Customized Buzz Points",

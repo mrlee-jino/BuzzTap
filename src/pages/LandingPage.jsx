@@ -175,7 +175,7 @@ export default function LandingPage() {
                             <div className="h-10 rounded-md bg-[#FFD400]/25" />
                           </div>
                           <div className="text-right text-lg font-semibold">
-                            <div className="text-[#FFD400]">₱18.2k</div>
+                            <div className="text-[#FFD400]">—</div>
                             <div className="text-xs uppercase text-[#b5b7bf]">Volume</div>
                           </div>
                         </div>
@@ -185,7 +185,7 @@ export default function LandingPage() {
                     <div className="space-y-4">
                       <div className="rounded-2xl border border-white/10 bg-[#141b24] p-3">
                         <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-[#b5b7bf]">BuzzPoints</div>
-                        <p className="text-3xl font-semibold tracking-[-0.06em] text-[#FFD400]">12,480</p>
+                        <p className="text-3xl font-semibold tracking-[-0.06em] text-[#FFD400]">—</p>
                         <p className="mt-2 text-sm text-[#d7dce4]">Issued this month</p>
                       </div>
 
@@ -193,8 +193,8 @@ export default function LandingPage() {
                         <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-[#b5b7bf]">Customer</div>
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-sm font-medium">Jordan Reyes</p>
-                            <p className="text-xs text-[#b5b7bf]">VIP Member</p>
+                            <p className="text-sm font-medium">Customer activity</p>
+                            <p className="text-xs text-[#b5b7bf]">Connected experience</p>
                           </div>
                           <div className="rounded-full bg-[#FFD400] px-2 py-1 text-[10px] font-semibold uppercase text-[#111111]">+50</div>
                         </div>
@@ -342,17 +342,17 @@ export default function LandingPage() {
                       <span className="text-sm text-[#eef2f7]">Available balance</span>
                       <WalletCards size={16} className="text-[#FFD400]" />
                     </div>
-                    <p className="mt-3 text-3xl font-semibold tracking-[-0.06em] text-[#FFD400]">₱12.4k</p>
+                    <p className="mt-3 text-3xl font-semibold tracking-[-0.06em] text-[#FFD400]">—</p>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl bg-white/5 p-3">
                       <div className="text-[10px] uppercase tracking-[0.22em] text-[#c2c9d1]">Redeemed</div>
-                      <div className="mt-2 text-2xl font-semibold text-white">2,140</div>
+                      <div className="mt-2 text-2xl font-semibold text-white">—</div>
                     </div>
                     <div className="rounded-2xl bg-white/5 p-3">
                       <div className="text-[10px] uppercase tracking-[0.22em] text-[#c2c9d1]">Issued</div>
-                      <div className="mt-2 text-2xl font-semibold text-white">8,960</div>
+                      <div className="mt-2 text-2xl font-semibold text-white">—</div>
                     </div>
                   </div>
                 </div>

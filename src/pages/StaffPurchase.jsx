@@ -13,8 +13,12 @@ export default function StaffPurchase() {
 
   const submit = (event) => {
     event.preventDefault()
+    if (!selectedProduct) {
+      setNotice("Inventory is unavailable until the backend is connected.")
+      return
+    }
     const ok = purchaseInventory(selectedProduct.id, Number(quantity), "Staff Account")
-    setNotice(ok ? `Inventory updated for ${selectedProduct.name}.` : "Unable to process this purchase request.")
+    setNotice(ok ? `Inventory updated for ${selectedProduct.name}.` : "Inventory purchases are unavailable until the backend is connected.")
   }
 
   return (

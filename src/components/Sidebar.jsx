@@ -3,7 +3,6 @@ import { useState } from "react"
 import {
   LayoutDashboard,
   Monitor,
-  CreditCard,
   Receipt,
   Users,
   Package,
@@ -255,7 +254,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
         </button>
       </div>
     </aside>
-    {confirmLogout && <Modal title="Log out of BuzzTap?" onClose={() => setConfirmLogout(false)}><p className="text-sm text-[#888]">Your prototype session will be cleared and you will return to the login page.</p><div className="mt-6 flex justify-end gap-3"><button onClick={() => setConfirmLogout(false)} className="rounded-xl border border-[#333] px-4 py-3 text-sm text-white">Cancel</button><button onClick={onLogout} className="rounded-xl bg-[#F5C400] px-4 py-3 text-sm font-semibold text-black">Log out</button></div></Modal>}
+    {confirmLogout && <Modal title="Log out of BuzzTap?" onClose={() => setConfirmLogout(false)}><p className="text-sm text-[#888]">Your session will be cleared and you will return to the login page.</p><div className="mt-6 flex justify-end gap-3"><button onClick={() => setConfirmLogout(false)} className="rounded-xl border border-[#333] px-4 py-3 text-sm text-white">Cancel</button><button onClick={onLogout} className="rounded-xl bg-[#F5C400] px-4 py-3 text-sm font-semibold text-black">Log out</button></div></Modal>}
     </>
   )
 }
