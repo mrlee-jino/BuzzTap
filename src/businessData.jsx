@@ -1,5 +1,7 @@
-import { useState } from "react"
+import { useMemo } from "react"
+
 import { BusinessContext } from "./businessContext"
+import { useAuth } from "./context/useAuth"
 
 const emptyWallet = {
   purchased: 0,
@@ -10,17 +12,89 @@ const emptyWallet = {
 }
 
 export function BusinessProvider({ children }) {
-  const [customers] = useState([])
-  const [transactions] = useState([])
-  const [activities] = useState([])
-  const [wallet] = useState(emptyWallet)
-  const [purchaseRequests] = useState([])
-  const [settlementRequests] = useState([])
-  const [cards] = useState([])
-  const [products] = useState([])
-  const [workstations] = useState([])
-  const [staff] = useState([])
+  const {
+    user,
+    profile,
+    memberships,
+    loading: authLoading,
+    error: authError,
+    isAuthenticated,
+  } = useAuth()
 
+  /*
+   * For now, Business Web uses the authenticated user's
+   * active business membership.
+   *
+   * Multi-business selection can be added later without
+   * changing the database structure.
+   */
+  const activeMemberships = useMemo(
+    () =>
+      (memberships || []).filter(
+        (membership) =>
+          membership.status === "ACTIVE" &&
+          membership.businesses
+      ),
+    [memberships]
+  )
+
+  /*
+   * Current Business
+   *
+   * At this stage, if the user has exactly one active business,
+   * use it automatically.
+   *
+   * If the user has multiple businesses, we intentionally do
+   * not randomly select one.
+   */
+  const business = useMemo(() => {
+    if (activeMemberships.length !== 1) {
+      return null
+    }
+
+    return activeMemberships[0].businesses
+  }, [activeMemberships])
+
+  const currentMembership = useMemo(() => {
+    if (activeMemberships.length !== 1) {
+      return null
+    }
+
+    return activeMemberships[0]
+  }, [activeMemberships])
+
+  const businessRole = currentMembership?.role || null
+
+  /*
+   * These arrays remain empty for now.
+   *
+   * We will connect each one to Supabase in separate phases
+   * so we don't introduce multiple database/RLS problems at once.
+   */
+  const customers = []
+  const transactions = []
+  const activities = []
+  const purchaseRequests = []
+  const settlementRequests = []
+  const cards = []
+  const products = []
+  const workstations = []
+  const staff = []
+
+  /*
+   * Wallet remains neutral until the real wallet/ledger
+   * tables are connected.
+   */
+  const wallet = emptyWallet
+
+  /*
+   * Existing mutation API is intentionally kept so the
+   * existing pages don't break while we migrate them
+   * from mock data to Supabase.
+   *
+   * These will be replaced with real Supabase mutations
+   * in later phases.
+   */
   const authenticateStaff = () => null
   const loadPoints = () => false
   const purchase = () => false
@@ -44,7 +118,23 @@ export function BusinessProvider({ children }) {
   return (
     <BusinessContext.Provider
       value={{
-        business: null,
+        /*
+         * Authentication / business identity
+         */
+        user,
+        profile,
+        memberships,
+        activeMemberships,
+        currentMembership,
+        business,
+        businessRole,
+        isAuthenticated,
+        authLoading,
+        authError,
+
+        /*
+         * Business data
+         */
         customers,
         transactions,
         activities,
@@ -55,6 +145,10 @@ export function BusinessProvider({ children }) {
         products,
         workstations,
         staff,
+
+        /*
+         * Existing API
+         */
         authenticateStaff,
         loadPoints,
         purchase,
