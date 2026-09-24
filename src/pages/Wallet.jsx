@@ -9,12 +9,12 @@ function Wallet() {
   const [amount, setAmount] = useState("")
   const [notice, setNotice] = useState("")
   const available = wallet.purchased - wallet.distributed
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault()
     const request = { amount: Number(amount), notes: event.currentTarget.notes.value, created: "Just now" }
     const ok = modal === "purchase"
-      ? requestPurchase({ ...request, reference: event.currentTarget.reference.value })
-      : requestSettlement(request)
+      ? await requestPurchase({ ...request, reference: event.currentTarget.reference.value })
+      : await requestSettlement(request)
     setNotice(ok ? "Request submitted successfully." : "Requests are unavailable until the backend is connected.")
     setModal(null); setAmount("")
   }

@@ -264,6 +264,21 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function changePassword(password) {
+    setError(null)
+
+    const { error: passwordError } = await supabase.auth.updateUser({
+      password,
+    })
+
+    if (passwordError) {
+      setError(passwordError.message)
+      return { success: false, error: passwordError }
+    }
+
+    return { success: true }
+  }
+
   async function refreshUserData() {
     if (!user) return null
 
@@ -288,6 +303,7 @@ export function AuthProvider({ children }) {
     signIn,
     registerBusiness,
     signOut,
+    changePassword,
     refreshUserData,
     isAuthenticated: !!session,
   }

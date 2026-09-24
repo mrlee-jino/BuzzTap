@@ -12,6 +12,8 @@ import {
   ChevronRight,
   LogOut,
   Megaphone,
+  CreditCard,
+  ShoppingCart,
 } from "lucide-react"
 import { Modal } from "./BusinessUI"
 
@@ -58,6 +60,16 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       name: "Content",
       path: "/content",
       icon: Megaphone,
+    },
+    {
+      name: "NFC Cards",
+      path: "/nfc-cards",
+      icon: CreditCard,
+    },
+    {
+      name: "Staff Purchase",
+      path: "/staff-purchase",
+      icon: ShoppingCart,
     },
     {
       name: "Settings",
@@ -224,6 +236,36 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
               </NavLink>
             )
           })}
+
+          <button
+            onClick={() => setConfirmLogout(true)}
+            className="
+              group relative flex h-12 w-full items-center
+              rounded-xl text-[#A3A3A3]
+              transition-all duration-300
+              hover:bg-[#171717] hover:text-white
+            "
+            title={!sidebarOpen ? "Log out" : ""}
+          >
+            <LogOut
+              size={20}
+              strokeWidth={1.8}
+              className="ml-[15px] shrink-0 transition-transform duration-300 group-hover:scale-110"
+            />
+            <span
+              className={`
+                ml-4 whitespace-nowrap text-sm font-medium
+                transition-all duration-300
+                ${
+                  sidebarOpen
+                    ? "max-w-[180px] opacity-100 translate-x-0"
+                    : "max-w-0 opacity-0 -translate-x-3"
+                }
+              `}
+            >
+              Log out
+            </span>
+          </button>
         </div>
       </nav>
 
@@ -249,9 +291,6 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
             Online
           </span>
         </div>
-        <button onClick={() => setConfirmLogout(true)} className="mt-3 flex w-full items-center gap-2 text-xs text-[#777] hover:text-white" title="Log out">
-          <LogOut size={14} /> Log out
-        </button>
       </div>
     </aside>
     {confirmLogout && <Modal title="Log out of BuzzTap?" onClose={() => setConfirmLogout(false)}><p className="text-sm text-[#888]">Your session will be cleared and you will return to the login page.</p><div className="mt-6 flex justify-end gap-3"><button onClick={() => setConfirmLogout(false)} className="rounded-xl border border-[#333] px-4 py-3 text-sm text-white">Cancel</button><button onClick={onLogout} className="rounded-xl bg-[#F5C400] px-4 py-3 text-sm font-semibold text-black">Log out</button></div></Modal>}

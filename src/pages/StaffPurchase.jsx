@@ -11,13 +11,13 @@ export default function StaffPurchase() {
 
   const selectedProduct = products.find((item) => item.id === selected) || products[0]
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault()
     if (!selectedProduct) {
       setNotice("Inventory is unavailable until the backend is connected.")
       return
     }
-    const ok = purchaseInventory(selectedProduct.id, Number(quantity), "Staff Account")
+    const ok = await purchaseInventory(selectedProduct.id, Number(quantity), "Staff Account")
     setNotice(ok ? `Inventory updated for ${selectedProduct.name}.` : "Inventory purchases are unavailable until the backend is connected.")
   }
 

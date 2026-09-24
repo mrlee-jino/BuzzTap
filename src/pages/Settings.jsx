@@ -29,7 +29,7 @@ const requirementList = [
   ["One special character", (value) => /[^A-Za-z0-9]/.test(value)],
 ]
 
-function Settings() {
+function Settings({ changePassword }) {
   const {
     business,
     profile,
@@ -54,10 +54,10 @@ function Settings() {
     confirm: false,
   })
 
-  const invite = (event) => {
+  const invite = async (event) => {
     event.preventDefault()
 
-    const ok = addStaff(
+    const ok = await addStaff(
       Object.fromEntries(new FormData(event.currentTarget))
     )
 
@@ -121,18 +121,20 @@ function Settings() {
     return Object.keys(nextErrors).length === 0
   }
 
-  const changePassword = (event) => {
+  const submitPasswordChange = async (event) => {
     event.preventDefault()
 
     if (!validatePassword()) {
       return
     }
 
+    const result = await changePassword(passwords.next)
     setNotice(
-      "Password changes are unavailable until backend security is connected."
+      result.success
+        ? "Password changed successfully."
+        : result.error?.message || "Password change failed.",
     )
-
-    closePassword()
+    if (result.success) closePassword()
   }
 
   const passwordField = (key, label, placeholder) => (
@@ -174,7 +176,7 @@ function Settings() {
             <EyeOff size={17} />
           ) : (
             <Eye size={17} />
-          )}
+         )}
         </button>
       </div>
 
@@ -182,7 +184,7 @@ function Settings() {
         <p className="mt-2 text-xs text-red-400">
           {errors[key]}
         </p>
-      )}
+     )}
     </Field>
   )
 
@@ -213,7 +215,7 @@ function Settings() {
         <p className="mb-5 rounded-xl border border-[#F5C400]/30 bg-[#F5C400]/10 p-3 text-sm text-[#F5C400]">
           {notice || "Business profile is currently read-only."}
         </p>
-      )}
+     )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* BUSINESS PROFILE */}
@@ -349,31 +351,27 @@ function Settings() {
                     {member.status === "ACTIVE" &&
                       member.role !== "OWNER" && (
                         <button
-                          onClick={() =>
-                            updateStaffStatus(
+                          onClick={async () => await updateStaffStatus(
                               member.id,
                               "SUSPENDED"
-                            )
-                          }
+                            )}
                           className="text-xs text-red-400"
                         >
                           Suspend
                         </button>
-                      )}
+                     )}
 
                     {member.status === "SUSPENDED" && (
                       <button
-                        onClick={() =>
-                          updateStaffStatus(
+                        onClick={async () => await updateStaffStatus(
                             member.id,
                             "ACTIVE"
-                          )
-                        }
+                          )}
                         className="text-xs text-[#F5C400]"
                       >
                         Reactivate
                       </button>
-                    )}
+                   )}
                   </div>
                 </div>
               ))
@@ -381,7 +379,7 @@ function Settings() {
               <p className="text-sm text-[#666]">
                 No staff accounts available.
               </p>
-            )}
+           )}
           </div>
         </section>
 
@@ -461,7 +459,7 @@ function Settings() {
             </Button>
           </form>
         </Modal>
-      )}
+     )}
 
       {/* CHANGE PASSWORD MODAL */}
       {passwordModal && (
@@ -475,20 +473,20 @@ function Settings() {
           </p>
 
           <form
-            onSubmit={changePassword}
+            onSubmit={submitPasswordChange}
             className="space-y-4"
           >
             {passwordField(
               "current",
               "Current Password",
               "Enter current password"
-            )}
+           )}
 
             {passwordField(
               "next",
               "New Password",
               "Enter a new password"
-            )}
+           )}
 
             <div className="rounded-xl border border-[#242424] bg-[#0d0d0d] p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#666]">
@@ -514,7 +512,7 @@ function Settings() {
               "confirm",
               "Confirm New Password",
               "Repeat your new password"
-            )}
+           )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button
@@ -531,7 +529,7 @@ function Settings() {
             </div>
           </form>
         </Modal>
-      )}
+     )}
     </div>
   )
 }
