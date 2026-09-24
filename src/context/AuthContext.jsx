@@ -29,8 +29,7 @@ export function AuthProvider({ children }) {
       .from("profiles")
       .select(`
         id,
-        first_name,
-        last_name,
+        full_name,
         email,
         phone,
         role,
@@ -197,6 +196,50 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function registerBusiness({
+    businessName,
+    email,
+    password,
+    businessType,
+    phone,
+    address,
+  }) {
+    setError(null)
+
+    const {
+      data: signUpData,
+      error: signUpError,
+    } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          business_name: businessName.trim(),
+          business_type: businessType,
+          phone: phone.trim(),
+          address: address.trim(),
+        },
+      },
+    })
+
+    if (signUpError || !signUpData.user) {
+      const error = signUpError || new Error("Unable to create the account.")
+      console.error("Failed to create the Auth user:", error)
+      setError(error.message)
+
+      return { success: false, error }
+    }
+
+    if (signUpData.session) {
+      await supabase.auth.signOut()
+    }
+
+    return {
+      success: true,
+      requiresEmailConfirmation: !signUpData.session,
+    }
+  }
+
   async function signOut() {
     setError(null)
 
@@ -243,6 +286,7 @@ export function AuthProvider({ children }) {
     loading,
     error,
     signIn,
+    registerBusiness,
     signOut,
     refreshUserData,
     isAuthenticated: !!session,

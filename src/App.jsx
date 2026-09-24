@@ -84,6 +84,7 @@ function AppLayout() {
     loading,
     isAuthenticated,
     signIn,
+    registerBusiness,
     signOut,
   } = useAuth()
 
@@ -130,12 +131,7 @@ function AppLayout() {
     return {
       id: user.id,
 
-      name:
-        [profile.first_name, profile.last_name]
-          .filter(Boolean)
-          .join(" ") ||
-        profile.email ||
-        user.email,
+      name: profile.full_name || profile.email || user.email,
 
       email: profile.email || user.email,
 
@@ -205,7 +201,7 @@ function AppLayout() {
 
           <Route
             path="/subscribe"
-            element={<Subscribe />}
+            element={<Subscribe registerBusiness={registerBusiness} />}
           />
 
           <Route
@@ -510,6 +506,14 @@ function Login({ signIn, onLogin }) {
           message.includes("invalid credentials")
         ) {
           setError("Invalid email or password.")
+        } else if (message.includes("json object requested")) {
+          setError(
+            "This account is missing its BuzzTap profile. Run the backfill migration in Supabase, then try again.",
+          )
+        } else if (message.includes("row-level security")) {
+          setError(
+            "Supabase blocked access to your profile. Confirm the RLS read migration was run.",
+          )
         } else if (!result.profile) {
           setError(
             "Your BuzzTap profile could not be loaded.",

@@ -246,7 +246,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
           <span className="h-2 w-2 rounded-full bg-[#F5C400] shadow-[0_0_10px_#F5C400]" />
 
           <span className="text-xs text-[#A3A3A3]">
-            System Online
+            Online
           </span>
         </div>
         <button onClick={() => setConfirmLogout(true)} className="mt-3 flex w-full items-center gap-2 text-xs text-[#777] hover:text-white" title="Log out">

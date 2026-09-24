@@ -33,7 +33,6 @@ function Settings() {
   const {
     business,
     profile,
-    businessRole,
     staff,
     addStaff,
     updateStaffStatus,
@@ -194,12 +193,7 @@ function Settings() {
     business?.address ||
     ""
 
-  const ownerName =
-    [profile?.first_name, profile?.last_name]
-      .filter(Boolean)
-      .join(" ") ||
-    profile?.email ||
-    ""
+  const ownerName = profile?.full_name || profile?.email || ""
 
   return (
     <div className="mx-auto max-w-[1100px]">
