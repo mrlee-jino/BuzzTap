@@ -25,7 +25,6 @@ import Settings from "./pages/Settings"
 import Wallet from "./pages/Wallet"
 import Content from "./pages/Content"
 import StaffPurchase from "./pages/StaffPurchase"
-import NFCCards from "./pages/NFCCards"
 import { BusinessProvider } from "./businessData"
 
 function App() {
@@ -45,7 +44,6 @@ const ROLE_PATHS = {
     "/transactions",
     "/customers",
     "/products-services",
-      "/nfc-cards",
     "/reports",
     "/wallet",
     "/settings",
@@ -59,7 +57,6 @@ const ROLE_PATHS = {
     "/transactions",
     "/customers",
     "/products-services",
-    "/nfc-cards",
     "/reports",
     "/wallet",
     "/content",
@@ -70,13 +67,11 @@ const ROLE_PATHS = {
     "/transactions",
     "/customers",
     "/wallet",
-    "/nfc-cards",
     "/staff-purchase",
   ],
 
   STAFF: [
     "/transactions",
-    "/nfc-cards",
     "/staff-purchase",
   ],
 }
@@ -376,18 +371,6 @@ function AppLayout() {
                 </ProtectedRoute>
               }
             />
-
-              <Route
-                path="/nfc-cards"
-                element={
-                  <ProtectedRoute
-                    allowedRoles={["OWNER", "MANAGER", "CASHIER", "STAFF"]}
-                    currentUser={currentUser}
-                  >
-                    <NFCCards />
-                  </ProtectedRoute>
-                }
-              />
 
             <Route
               path="/reports"

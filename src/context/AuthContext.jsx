@@ -2,6 +2,20 @@ import { useEffect, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { AuthContext } from "./AuthContextValue"
 
+async function recordAccessEvents(userId, memberships, event) {
+  const rows = (memberships || [])
+    .filter((membership) => membership.business_id)
+    .map((membership) => ({
+      business_id: membership.business_id,
+      user_id: userId,
+      event,
+    }))
+
+  if (rows.length) {
+    await supabase.from("business_access_logs").insert(rows)
+  }
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [user, setUser] = useState(null)
@@ -129,6 +143,12 @@ export function AuthProvider({ children }) {
 
       if (result.error) {
         setError(result.error.message)
+      } else if (currentSession?.user) {
+        await recordAccessEvents(
+          currentSession.user.id,
+          result.memberships,
+          "LOGIN",
+        )
       }
 
       setLoading(false)
@@ -188,6 +208,8 @@ export function AuthProvider({ children }) {
       }
     }
 
+    await recordAccessEvents(data.user.id, result.memberships, "LOGIN")
+
     return {
       success: true,
       user: data.user,
@@ -242,6 +264,8 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     setError(null)
+
+    await recordAccessEvents(user?.id, memberships, "LOGOUT")
 
     const { error: signOutError } = await supabase.auth.signOut()
 

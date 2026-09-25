@@ -12,7 +12,6 @@ import {
   ChevronRight,
   LogOut,
   Megaphone,
-  CreditCard,
   ShoppingCart,
 } from "lucide-react"
 import { Modal } from "./BusinessUI"
@@ -60,11 +59,6 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       name: "Content",
       path: "/content",
       icon: Megaphone,
-    },
-    {
-      name: "NFC Cards",
-      path: "/nfc-cards",
-      icon: CreditCard,
     },
     {
       name: "Staff Purchase",

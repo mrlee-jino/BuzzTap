@@ -6,6 +6,8 @@ import {
   LockKeyhole,
   Plus,
   Save,
+  Search,
+  Trash2,
   UserCog,
 } from "lucide-react"
 import { useState } from "react"
@@ -34,14 +36,18 @@ function Settings({ changePassword }) {
     business,
     profile,
     staff,
+    accessLogs,
     addStaff,
     updateStaffStatus,
+    deleteStaff,
   } = useBusiness()
 
   const [saved, setSaved] = useState(false)
   const [staffModal, setStaffModal] = useState(false)
   const [passwordModal, setPasswordModal] = useState(false)
   const [notice, setNotice] = useState("")
+  const [accessQuery, setAccessQuery] = useState("")
+  const [accessDay, setAccessDay] = useState("")
   const [passwords, setPasswords] = useState({
     current: "",
     next: "",
@@ -57,17 +63,17 @@ function Settings({ changePassword }) {
   const invite = async (event) => {
     event.preventDefault()
 
-    const ok = await addStaff(
+    const result = await addStaff(
       Object.fromEntries(new FormData(event.currentTarget))
     )
 
     setNotice(
-      ok
-        ? "Invitation sent successfully."
-        : "Staff invitations are unavailable until the backend is connected."
+      result.success
+        ? "Staff account created successfully."
+        : result.error || "Staff invitation could not be saved."
     )
 
-    if (ok) {
+    if (result.success) {
       setStaffModal(false)
     }
   }
@@ -196,6 +202,15 @@ function Settings({ changePassword }) {
     ""
 
   const ownerName = profile?.full_name || profile?.email || ""
+  const visibleAccessLogs = accessLogs
+    .filter((entry) =>
+      `${entry.userEmail} ${entry.event}`
+        .toLowerCase()
+        .includes(accessQuery.toLowerCase()),
+    )
+    .filter((entry) => !accessDay || entry.occurred_at?.slice(0, 10) === accessDay)
+    .sort((left, right) => new Date(right.occurred_at) - new Date(left.occurred_at))
+    .slice(0, 20)
 
   return (
     <div className="mx-auto max-w-[1100px]">
@@ -310,8 +325,8 @@ function Settings({ changePassword }) {
                 </h2>
 
                 <p className="text-sm text-[#666]">
-                  UI permissions are advisory; backend authorization
-                  is required.
+                  Roles control which business features each member
+                  can access.
                 </p>
               </div>
             </div>
@@ -362,15 +377,28 @@ function Settings({ changePassword }) {
                      )}
 
                     {member.status === "SUSPENDED" && (
-                      <button
-                        onClick={async () => await updateStaffStatus(
-                            member.id,
-                            "ACTIVE"
-                          )}
-                        className="text-xs text-[#F5C400]"
-                      >
-                        Reactivate
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={async () => await updateStaffStatus(
+                              member.id,
+                              "ACTIVE"
+                            )}
+                          className="text-xs text-[#F5C400]"
+                        >
+                          Reactivate
+                        </button>
+
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Delete the account for ${member.email}?`)) return
+                            await deleteStaff(member.id)
+                          }}
+                          className="inline-flex items-center gap-1 text-xs text-red-400"
+                        >
+                          <Trash2 size={14} />
+                          Delete account
+                        </button>
+                      </div>
                    )}
                   </div>
                 </div>
@@ -381,6 +409,72 @@ function Settings({ changePassword }) {
               </p>
            )}
           </div>
+        </section>
+
+        {/* ACCESS HISTORY */}
+        <section className={`${cardClass} lg:col-span-2`}>
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <UserCog className="text-[#F5C400]" />
+
+              <div>
+                <h2 className="font-semibold text-white">
+                  Member Access History
+                </h2>
+
+                <p className="text-sm text-[#666]">
+                  Showing up to 20 most recent events.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666]" />
+                <input
+                  className={`${inputClass} pl-9 sm:w-64`}
+                  placeholder="Search email or event"
+                  value={accessQuery}
+                  onChange={(event) => setAccessQuery(event.target.value)}
+                />
+              </div>
+
+              <input
+                className={inputClass}
+                type="date"
+                value={accessDay}
+                onChange={(event) => setAccessDay(event.target.value)}
+                aria-label="Filter access history by day"
+              />
+            </div>
+          </div>
+
+          {visibleAccessLogs.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-left text-sm">
+                <thead className="border-b border-[#242424] text-xs uppercase tracking-wider text-[#666]">
+                  <tr>
+                    <th className="px-3 py-3">Email</th>
+                    <th className="px-3 py-3">Event</th>
+                    <th className="px-3 py-3">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleAccessLogs.map((entry) => (
+                    <tr className="border-b border-[#1d1d1d] last:border-0" key={entry.id}>
+                      <td className="px-3 py-3 text-white">{entry.userEmail}</td>
+                      <td className="px-3 py-3">
+                        <Status>{entry.event}</Status>
+                      </td>
+                      <td className="px-3 py-3 text-xs text-[#777]">{entry.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-[#666]">No member access history available.</p>
+          )}
         </section>
 
         {/* SECURITY */}
@@ -438,6 +532,29 @@ function Settings({ changePassword }) {
                 name="email"
                 type="email"
                 required
+                autoComplete="email"
+              />
+            </Field>
+
+            <Field label="Phone Number">
+              <input
+                className={inputClass}
+                name="phone"
+                type="tel"
+                required
+                autoComplete="tel"
+              />
+            </Field>
+
+            <Field label="Account Password">
+              <input
+                className={inputClass}
+                name="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                placeholder="At least 8 characters"
               />
             </Field>
 
@@ -447,7 +564,6 @@ function Settings({ changePassword }) {
                 name="role"
                 defaultValue="STAFF"
               >
-                <option>OWNER</option>
                 <option>MANAGER</option>
                 <option>STAFF</option>
                 <option>CASHIER</option>

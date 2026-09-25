@@ -5,11 +5,26 @@ import { BusinessContext } from "./businessContext"
 import { useAuth } from "./context/useAuth"
 
 const emptyWallet = { purchased: 0, distributed: 0, collected: 0, pendingSettlement: 0, settled: 0 }
-const emptyData = { customers: [], transactions: [], activities: [], purchaseRequests: [], settlementRequests: [], cards: [], products: [], workstations: [], staff: [] }
+const emptyData = { customers: [], transactions: [], activities: [], purchaseRequests: [], settlementRequests: [], cards: [], products: [], workstations: [], staff: [], accessLogs: [] }
 
 const money = (value) => Number(value || 0)
 const displayDate = (value) => value ? new Date(value).toLocaleString() : ""
 const idFor = (prefix) => `${prefix}-${Date.now().toString(36).toUpperCase()}`
+
+const functionErrorMessage = async (error, data, fallback) => {
+  if (data?.error) return data.error
+
+  if (error?.context) {
+    try {
+      const body = await error.context.json()
+      if (body?.error) return body.error
+    } catch {
+      // Keep the SDK error when the response is not JSON.
+    }
+  }
+
+  return error?.message || fallback
+}
 
 export function BusinessProvider({ children }) {
   const { user, profile, memberships, loading: authLoading, error: authError, isAuthenticated } = useAuth()
@@ -43,6 +58,8 @@ export function BusinessProvider({ children }) {
       supabase.from("wallet_ledger").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
       supabase.from("business_transactions").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
       supabase.from("business_invitations").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
+      supabase.from("business_access_logs").select("*").eq("business_id", bid).order("occurred_at", { ascending: false }),
+      supabase.from("profiles").select("id, full_name, email"),
       supabase.from("purchase_requests").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
       supabase.from("settlement_requests").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
       supabase.from("content_items").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
@@ -53,7 +70,7 @@ export function BusinessProvider({ children }) {
       setDataLoading(false)
       return
     }
-    const [customerResult, productResult, workstationResult, cardResult, ledgerResult, transactionResult, invitationResult, purchaseResult, settlementResult, contentResult] = queries
+    const [customerResult, productResult, workstationResult, cardResult, ledgerResult, transactionResult, invitationResult, accessLogResult, profileResult, purchaseResult, settlementResult, contentResult] = queries
     const customerBalances = (ledgerResult.data || []).reduce((result, item) => {
       if (!item.customer_id) return result
       const amount = money(item.amount)
@@ -75,13 +92,18 @@ export function BusinessProvider({ children }) {
     walletTotals.pendingSettlement = (settlementResult.data || []).filter((item) => item.status === "PENDING").reduce((sum, item) => sum + money(item.amount), 0)
     walletTotals.settled = (settlementResult.data || []).filter((item) => item.status === "APPROVED" || item.status === "SETTLED").reduce((sum, item) => sum + money(item.amount), 0)
     const customerName = (id) => customers.find((item) => item.id === id)?.name || "Unknown customer"
+    const profileById = (profileResult.data || []).reduce((result, item) => {
+      result[item.id] = item
+      return result
+    }, {})
     setData({
       customers,
       products: (productResult.data || []).map((item) => ({ ...item, price: money(item.price), stock: Number(item.stock || 0) })),
       workstations: (workstationResult.data || []).map((item) => ({ ...item, rate: money(item.rate) })),
       cards: (cardResult.data || []).map((item) => ({ ...item, customer: item.customer_id ? customerName(item.customer_id) : "-" })),
-      transactions: (transactionResult.data || []).map((item) => ({ ...item, customer: customerName(item.customer_id), card: item.card_id || "-", workstation: item.workstation_id || "-", date: displayDate(item.created_at), amount: money(item.amount) })),
-      staff: (invitationResult.data || []).map((item) => ({ ...item, name: item.email, email: item.email, invitation_status: item.status })),
+      transactions: (transactionResult.data || []).map((item) => ({ ...item, customer: customerName(item.customer_id), card: item.card_id || "-", workstation: item.workstation_id || "-", operatorName: profileById[item.created_by]?.full_name || profileById[item.created_by]?.email || "Unknown member", date: displayDate(item.created_at), amount: money(item.amount) })),
+      staff: (invitationResult.data || []).map((item) => ({ ...item, name: item.name || item.email, email: item.email, invitation_status: item.status })),
+      accessLogs: (accessLogResult.data || []).map((item) => ({ ...item, userEmail: profileById[item.user_id]?.email || "Unknown member", date: displayDate(item.occurred_at) })),
       purchaseRequests: (purchaseResult.data || []).map((item) => ({ ...item, amount: money(item.amount) })),
       settlementRequests: (settlementResult.data || []).map((item) => ({ ...item, amount: money(item.amount) })),
       activities: (contentResult.data || []).map((item) => ({
@@ -107,8 +129,10 @@ export function BusinessProvider({ children }) {
   const mutate = useCallback(async (table, payload, options = {}) => {
     if (!business?.id) return false
     const query = supabase.from(table)
-    const insertPayload = ["wallet_ledger", "business_transactions", "business_invitations", "content_items", "purchase_requests", "settlement_requests"].includes(table)
+    const insertPayload = ["wallet_ledger", "business_transactions", "content_items", "purchase_requests", "settlement_requests"].includes(table)
       ? { ...payload, business_id: business.id, created_by: user?.id }
+      : table === "business_invitations"
+        ? { ...payload, business_id: business.id, invited_by: user?.id }
       : { ...payload, business_id: business.id }
     const result = options.update
       ? await query.update(payload).eq("business_id", business.id).eq(options.column || "id", options.id)
@@ -158,8 +182,49 @@ export function BusinessProvider({ children }) {
       status: item.status || "DRAFT",
     }, { update: Boolean(item.id), id: item.id })
   }
-  const addStaff = (values) => mutate("business_invitations", { email: values.email, role: values.role || "STAFF" })
+  const addStaff = async (values) => {
+    if (!business?.id) {
+      return { success: false, error: "No active business is available." }
+    }
+
+    const { data, error } = await supabase.functions.invoke("create-staff-account", {
+      body: {
+        businessId: business.id,
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        password: values.password,
+        role: values.role || "STAFF",
+      },
+    })
+
+    if (error || data?.error) {
+      const message = await functionErrorMessage(error, data, "Unable to create staff account.")
+      setDataError(message)
+      return { success: false, error: message }
+    }
+
+    await loadData()
+    return { success: true }
+  }
   const updateStaffStatus = (id, status) => update("business_invitations", id, { status })
+  const deleteStaff = async (memberId) => {
+    if (!business?.id) {
+      return { success: false, error: "No active business is available." }
+    }
+
+    const { data, error } = await supabase.functions.invoke("delete-staff-account", {
+      body: { businessId: business.id, memberId },
+    })
+    if (error || data?.error) {
+      const message = await functionErrorMessage(error, data, "Unable to delete staff account.")
+      setDataError(message)
+      return { success: false, error: message }
+    }
+
+    await loadData()
+    return { success: true }
+  }
   const purchaseInventory = async (productId, quantity, note) => {
     const product = data.products.find((item) => item.id === productId)
     if (!product || product.stock < quantity) return false
@@ -182,7 +247,7 @@ export function BusinessProvider({ children }) {
       isAuthenticated, authLoading, authError, dataLoading, dataError, refreshBusinessData: loadData,
       ...data, wallet, authenticateStaff, loadPoints, purchase, refund, addActivity, addCustomer,
       updateCustomerStatus, addCard, replaceCard, updateCardStatus, addProduct, updateProductStatus,
-      addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, purchaseInventory,
+      addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, deleteStaff, purchaseInventory,
       requestPurchase, requestSettlement,
     }}>
       {children}
