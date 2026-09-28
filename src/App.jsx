@@ -10,6 +10,7 @@ import { useMemo, useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
 
 import Sidebar from "./components/Sidebar"
+import BusinessNotifications from "./components/BusinessNotifications"
 import { useAuth } from "./context/useAuth"
 
 import Dashboard from "./pages/Dashboard"
@@ -286,6 +287,9 @@ function AppLayout() {
         }`}
       >
         <div className="p-5 sm:p-8">
+          <div className="mb-5 flex justify-end">
+            <BusinessNotifications businessId={currentMembership.business_id} />
+          </div>
           <Routes>
             <Route
               path="/"
