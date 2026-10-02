@@ -4,8 +4,8 @@ export function PageHeader({ eyebrow = "MANAGEMENT", title, description, action 
   return <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><p className="mb-2 text-sm font-medium text-[#F5C400]">{eyebrow}</p><h1 className="text-4xl font-bold tracking-tight text-white">{title}</h1><p className="mt-2 text-[#777]">{description}</p></div>{action}</div>
 }
 
-export function Button({ children, onClick, secondary = false, type = "button" }) {
-  return <button type={type} onClick={onClick} className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all hover:-translate-y-0.5 ${secondary ? "border border-[#333] bg-[#191919] text-white hover:border-[#F5C400]/50" : "bg-[#F5C400] text-black hover:bg-[#FFD83D]"}`}>{children}</button>
+export function Button({ children, onClick, secondary = false, type = "button", disabled = false }) {
+  return <button type={type} onClick={onClick} disabled={disabled} className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${secondary ? "border border-[#333] bg-[#191919] text-white hover:border-[#F5C400]/50" : "bg-[#F5C400] text-black hover:bg-[#FFD83D]"}`}>{children}</button>
 }
 
 export function Status({ children }) { return <span className="rounded-full bg-[#F5C400]/10 px-2.5 py-1 text-xs font-semibold text-[#F5C400]">{children}</span> }

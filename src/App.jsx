@@ -29,10 +29,15 @@ import StaffPurchase from "./pages/StaffPurchase"
 import { BusinessProvider } from "./businessData"
 
 function App() {
+  const [selectedMembership, setSelectedMembership] = useState(null)
+
   return (
-    <BusinessProvider>
+    <BusinessProvider selectedMembership={selectedMembership}>
       <BrowserRouter>
-        <AppLayout />
+        <AppLayout
+          selectedMembership={selectedMembership}
+          setSelectedMembership={setSelectedMembership}
+        />
       </BrowserRouter>
     </BusinessProvider>
   )
@@ -77,7 +82,7 @@ const ROLE_PATHS = {
   ],
 }
 
-function AppLayout() {
+function AppLayout({ selectedMembership, setSelectedMembership }) {
   const {
     user,
     profile,
@@ -91,7 +96,6 @@ function AppLayout() {
   } = useAuth()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [selectedMembership, setSelectedMembership] = useState(null)
 
   const location = useLocation()
   const navigate = useNavigate()

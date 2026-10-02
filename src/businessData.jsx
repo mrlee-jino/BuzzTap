@@ -26,7 +26,7 @@ const functionErrorMessage = async (error, data, fallback) => {
   return error?.message || fallback
 }
 
-export function BusinessProvider({ children }) {
+export function BusinessProvider({ children, selectedMembership }) {
   const { user, profile, memberships, loading: authLoading, error: authError, isAuthenticated } = useAuth()
   const [data, setData] = useState(emptyData)
   const [wallet, setWallet] = useState(emptyWallet)
@@ -37,8 +37,12 @@ export function BusinessProvider({ children }) {
     () => (memberships || []).filter((item) => item.status === "ACTIVE" && item.businesses),
     [memberships],
   )
-  const business = useMemo(() => activeMemberships.length === 1 ? activeMemberships[0].businesses : null, [activeMemberships])
-  const currentMembership = useMemo(() => activeMemberships.length === 1 ? activeMemberships[0] : null, [activeMemberships])
+  const currentMembership = useMemo(
+    () => activeMemberships.find((item) => item.id === selectedMembership?.id)
+      || (activeMemberships.length === 1 ? activeMemberships[0] : null),
+    [activeMemberships, selectedMembership],
+  )
+  const business = currentMembership?.businesses || null
   const businessRole = currentMembership?.role || null
 
   const loadData = useCallback(async () => {
@@ -172,18 +176,55 @@ export function BusinessProvider({ children }) {
     const item = typeof titleOrItem === "object"
       ? titleOrItem
       : { title: titleOrItem, description: content, contentId, type: "UPDATE" }
-    return mutate("content_items", {
+    if (!business?.id) {
+      return Promise.resolve({ success: false, error: "No active business is available." })
+    }
+    const payload = {
       content_id: item.contentId,
       title: item.title,
       description: item.description,
-      content: item.description,
+      content: item.content || item.description,
       type: item.type || "UPDATE",
       start_date: item.startDate || null,
       end_date: item.endDate || null,
       media_url: item.mediaUrl || null,
       call_to_action: item.callToAction || null,
       status: item.status || "DRAFT",
-    }, { update: Boolean(item.id), id: item.id })
+    }
+    const saveContent = async () => {
+      let result
+      try {
+        result = item.id
+          ? await supabase.from("content_items")
+            .update(payload)
+            .eq("business_id", business.id)
+            .eq("id", item.id)
+            .select("id")
+            .maybeSingle()
+          : await supabase.from("content_items")
+            .insert({ ...payload, business_id: business.id, created_by: user?.id })
+            .select("id")
+            .single()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected database error while saving content."
+        setDataError(message)
+        return { success: false, error: message }
+      }
+
+      if (result.error) {
+        setDataError(result.error.message)
+        return { success: false, error: result.error.message }
+      }
+      if (!result.data) {
+        const message = "Content was not found or you do not have permission to change it."
+        setDataError(message)
+        return { success: false, error: message }
+      }
+
+      await loadData()
+      return { success: true, id: result.data.id }
+    }
+    return saveContent()
   }
   const addStaff = async (values) => {
     if (!business?.id) {
