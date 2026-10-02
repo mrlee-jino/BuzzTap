@@ -89,6 +89,9 @@ export function BusinessProvider({ children }) {
       if (item.type === "CUSTOMER_PURCHASE") result.collected += amount
       return result
     }, { ...emptyWallet })
+    walletTotals.purchased += (purchaseResult.data || [])
+      .filter((item) => String(item.status || "").toUpperCase() === "APPROVED")
+      .reduce((sum, item) => sum + money(item.amount), 0)
     walletTotals.pendingSettlement = (settlementResult.data || []).filter((item) => item.status === "PENDING").reduce((sum, item) => sum + money(item.amount), 0)
     walletTotals.settled = (settlementResult.data || []).filter((item) => item.status === "APPROVED" || item.status === "SETTLED").reduce((sum, item) => sum + money(item.amount), 0)
     const customerName = (id) => customers.find((item) => item.id === id)?.name || "Unknown customer"
