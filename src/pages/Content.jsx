@@ -1,31 +1,16 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
-  Archive,
-  CalendarDays,
-  CheckCircle2,
-  Clock3,
-  Copy,
-  Eye,
   FileImage,
   LoaderCircle,
   Megaphone,
+  MoreHorizontal,
   Plus,
   Search,
   Send,
-  X,
 } from "lucide-react"
 import { useBusiness } from "../businessContext"
 import { Button, Field, PageHeader, cardClass, inputClass } from "../components/BusinessUI"
-
-const filters = [
-  { value: "ALL", label: "All content" },
-  { value: "PUBLISHED", label: "Published" },
-  { value: "PENDING_REVIEW", label: "Pending Review" },
-  { value: "DRAFT", label: "Drafts" },
-  { value: "EXPIRED", label: "Expired" },
-  { value: "REJECTED", label: "Rejected" },
-  { value: "ARCHIVED", label: "Archived" },
-]
+import { supabase } from "../lib/supabaseClient"
 
 const today = () => {
   const date = new Date()
@@ -63,73 +48,167 @@ function formatDate(value) {
     : parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
 }
 
-function statusStyle(status) {
-  if (status === "PUBLISHED") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-  if (status === "PENDING_REVIEW") return "border-amber-400/20 bg-amber-400/10 text-amber-300"
-  if (status === "REJECTED") return "border-red-400/20 bg-red-400/10 text-red-300"
-  if (status === "EXPIRED" || status === "ARCHIVED") return "border-[#444] bg-[#222] text-[#999]"
-  return "border-[#F5C400]/20 bg-[#F5C400]/10 text-[#F5C400]"
-}
-
 function StatusBadge({ status }) {
-  return <span className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusStyle(status)}`}>{statusLabel(status)}</span>
+  const style = status === "PUBLISHED"
+    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+    : status === "PENDING_REVIEW"
+      ? "border-amber-400/20 bg-amber-400/10 text-amber-300"
+      : status === "REJECTED"
+        ? "border-red-400/20 bg-red-400/10 text-red-300"
+        : status === "ARCHIVED" || status === "EXPIRED"
+          ? "border-[#444] bg-[#222] text-[#999]"
+          : "border-[#F5C400]/20 bg-[#F5C400]/10 text-[#F5C400]"
+  return <span className={`whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold ${style}`}>{statusLabel(status)}</span>
 }
 
-function ActionButton({ children, onClick, disabled, accent = false, label }) {
+function isVideoUrl(value) {
+  const url = safeMediaUrl(value)
+  return Boolean(url && /\.(mp4|webm|mov|m4v|ogv)(?:$|[?#])/i.test(url))
+}
+
+function FeedMedia({ url, title }) {
+  const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  if (!url || failed) {
+    return (
+      <div className="mx-3 mb-2 flex h-12 items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 text-[10px] text-[#6b7280]">
+        <FileImage size={14} className="shrink-0 text-[#9ca3af]" />
+        <span>{url ? "Media could not be loaded" : "No media attached"}</span>
+      </div>
+    )
+  }
+
+  if (isVideoUrl(url)) {
+    return (
+      <video
+        src={url}
+        controls
+        preload="metadata"
+        aria-label={title}
+        onError={() => setFailed(true)}
+        className="mx-3 mb-2 max-h-[220px] w-[calc(100%-1.5rem)] rounded-lg bg-[#111] object-contain"
+      />
+    )
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${accent ? "bg-[#F5C400] text-black hover:bg-[#FFD83D]" : "bg-[#1d1d1d] text-[#ccc] hover:bg-[#292929] hover:text-white"}`}
-    >
-      {children}
-    </button>
+    <div className={`mx-3 mb-2 overflow-hidden rounded-lg bg-[#f3f4f6] ${loaded ? "" : "h-12"}`}>
+      <img
+        src={url}
+        alt={title}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+        className={loaded ? "max-h-[220px] w-full object-cover" : "hidden"}
+      />
+      {!loaded && (
+        <div className="flex h-12 items-center gap-2 px-3 text-[10px] text-[#6b7280]">
+          <LoaderCircle size={13} className="animate-spin text-[#9ca3af]" />
+          Loading media…
+        </div>
+      )}
+    </div>
   )
 }
 
 function Content() {
   const { activities = [], dataLoading, dataError, addActivity, business } = useBusiness()
-  const [filter, setFilter] = useState("ALL")
   const [query, setQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("WORKING")
+  const [feedMode, setFeedMode] = useState("MINE")
+  const [communityPosts, setCommunityPosts] = useState([])
+  const [communityLoading, setCommunityLoading] = useState(true)
+  const [communityError, setCommunityError] = useState("")
   const [editor, setEditor] = useState(null)
-  const [preview, setPreview] = useState(null)
+  const [previewDraft, setPreviewDraft] = useState(null)
+  const [openMenuId, setOpenMenuId] = useState(null)
+  const [resetForm, setResetForm] = useState(0)
   const [notice, setNotice] = useState("")
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState(null)
+  const formPanel = useRef(null)
 
   const items = useMemo(
     () => activities.map((item) => ({ ...item, viewStatus: contentStatus(item) })),
     [activities],
   )
-  const visible = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase()
     return items.filter((item) => {
-      const matchesStatus = filter === "ALL" || item.viewStatus === filter
+      const matchesStatus = statusFilter === "ALL"
+        || (statusFilter === "WORKING" && ["DRAFT", "PENDING_REVIEW", "REJECTED"].includes(item.viewStatus))
+        || (statusFilter === item.viewStatus)
       const matchesSearch = !search || `${item.title} ${item.type} ${item.description}`.toLowerCase().includes(search)
       return matchesStatus && matchesSearch
     })
-  }, [items, filter, query])
-  const counts = [
-    { label: "Published", status: "PUBLISHED", icon: CheckCircle2, count: items.filter((item) => item.viewStatus === "PUBLISHED").length },
-    { label: "Pending Review", status: "PENDING_REVIEW", icon: Clock3, count: items.filter((item) => item.viewStatus === "PENDING_REVIEW").length },
-    { label: "Drafts", status: "DRAFT", icon: FileImage, count: items.filter((item) => item.viewStatus === "DRAFT").length },
-    { label: "Expired", status: "EXPIRED", icon: CalendarDays, count: items.filter((item) => item.viewStatus === "EXPIRED").length },
-  ]
-  const feedItems = items.filter((item) => item.viewStatus === "PUBLISHED").slice(0, 3)
+  }, [items, query, statusFilter])
 
-  const openEditor = (item = null) => {
-    setNotice("")
-    setEditor(item || {
-      type: "UPDATE",
-      title: "",
-      description: "",
-      startDate: today(),
-      endDate: "",
-      mediaUrl: "",
-      callToAction: "",
-    })
+  useEffect(() => {
+    let cancelled = false
+    async function loadCommunityPosts() {
+      if (!business?.id) {
+        setCommunityPosts([])
+        setCommunityLoading(false)
+        return
+      }
+      setCommunityLoading(true)
+      setCommunityError("")
+      let data
+      let error
+      try {
+        ({ data, error } = await supabase
+          .from("content_items")
+          .select("id,business_id,content_id,title,content,description,type,start_date,end_date,media_url,call_to_action,status,created_at")
+          .eq("status", "PUBLISHED")
+          .order("created_at", { ascending: false })
+          .limit(50))
+      } catch (requestError) {
+        if (cancelled) return
+        setCommunityError(requestError instanceof Error ? requestError.message : "The community feed request failed.")
+        setCommunityPosts([])
+        setCommunityLoading(false)
+        return
+      }
+      if (cancelled) return
+      if (error) {
+        setCommunityError(error.message)
+        setCommunityPosts([])
+      } else {
+        setCommunityPosts((data || []).map((item) => ({
+          ...item,
+          contentId: item.content_id || item.id,
+          description: item.description || item.content || "",
+          startDate: item.start_date || "",
+          endDate: item.end_date || "",
+          mediaUrl: item.media_url || "",
+          callToAction: item.call_to_action || "",
+        })))
+      }
+      setCommunityLoading(false)
+    }
+    loadCommunityPosts()
+    return () => { cancelled = true }
+  }, [activities, business?.id])
+
+  const ownPublished = items.filter((item) => item.viewStatus === "PUBLISHED"
+    && (!item.startDate || item.startDate <= today())
+    && (!item.endDate || item.endDate >= today()))
+  const postsInFeed = feedMode === "MINE"
+    ? [...(previewDraft ? [previewDraft] : []), ...ownPublished]
+    : communityPosts.filter((item) => item.business_id !== business?.id
+      && (!item.startDate || item.startDate <= today())
+      && (!item.endDate || item.endDate >= today()))
+  const editorCanSubmit = !editor?.id || ["DRAFT", "REJECTED"].includes(String(editor.status).toUpperCase())
+  const canEdit = (item) => ["DRAFT", "REJECTED"].includes(String(item.status).toUpperCase())
+
+  const openCreateForm = () => {
+    setEditor(null)
+    setPreviewDraft(null)
+    setFeedMode("MINE")
+    setResetForm((value) => value + 1)
+    formPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
 
   const save = async (event, submit = false) => {
@@ -156,7 +235,7 @@ function Content() {
       return
     }
     if (!business?.id) {
-      setNotice("No active business membership is available. Sign in with an active business account and try again.")
+      setNotice("No active business membership is available.")
       return
     }
 
@@ -172,15 +251,17 @@ function Content() {
       mediaUrl,
       callToAction,
       status: submit ? "SUBMITTED" : "DRAFT",
-      contentId: editor.contentId || crypto.randomUUID(),
+      contentId: editor?.contentId || crypto.randomUUID(),
     })
     setSaving(false)
     if (!result?.success) {
       setNotice(result?.error || "Content could not be saved. Please try again.")
       return
     }
-    setNotice(submit ? "Content submitted for admin review." : "Draft saved.")
+    setNotice(submit ? "Post submitted for admin review. It will appear in the feed after approval." : "Draft saved.")
     setEditor(null)
+    setPreviewDraft(null)
+    setResetForm((value) => value + 1)
   }
 
   const duplicate = async (item) => {
@@ -194,7 +275,7 @@ function Content() {
       status: "DRAFT",
     })
     setBusyId(null)
-    setNotice(result?.success ? "Content duplicated as a draft." : result?.error || "Content could not be duplicated.")
+    setNotice(result?.success ? "Post duplicated as a draft." : result?.error || "Post could not be duplicated.")
   }
 
   const updateStatus = async (item, status) => {
@@ -202,199 +283,247 @@ function Content() {
     setNotice("")
     const result = await addActivity({ ...item, status })
     setBusyId(null)
-    setNotice(result?.success ? `Content ${status === "SUBMITTED" ? "submitted for admin review" : "archived"}.` : result?.error || "Content status could not be updated.")
+    setNotice(result?.success ? "Post archived." : result?.error || "Post could not be archived.")
   }
 
-  const editorCanSubmit = !editor?.id || ["DRAFT", "REJECTED"].includes(String(editor.status).toUpperCase())
-  const editable = (item) => ["DRAFT", "REJECTED", "SUBMITTED", "PENDING", "PENDING_REVIEW"].includes(String(item.status).toUpperCase())
+  const edit = (item) => {
+    if (!canEdit(item)) return
+    setNotice("")
+    setEditor(item)
+    setFeedMode("MINE")
+    setPreviewDraft({ ...item, viewStatus: contentStatus(item), isDraftPreview: true })
+    formPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  const updateDraftPreview = (event) => {
+    const form = event.currentTarget
+    const values = new FormData(form)
+    const title = String(values.get("title") || "").trim()
+    const description = String(values.get("description") || "").trim()
+    const mediaUrl = String(values.get("mediaUrl") || "").trim()
+    if (!title && !description && !mediaUrl) {
+      setPreviewDraft(null)
+      return
+    }
+    setPreviewDraft({
+      ...(editor || {}),
+      title: title || "Untitled post",
+      description,
+      type: String(values.get("type") || "UPDATE"),
+      startDate: String(values.get("startDate") || ""),
+      endDate: String(values.get("endDate") || ""),
+      mediaUrl,
+      callToAction: String(values.get("callToAction") || "").trim(),
+      status: editor?.status || "DRAFT",
+      viewStatus: editor ? contentStatus(editor) : "DRAFT",
+      business_id: business?.id,
+      isDraftPreview: true,
+      id: editor?.id || "local-draft-preview",
+    })
+  }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="mx-auto max-w-[1700px]">
       <PageHeader
-        eyebrow="MOBILE APP CONTENT"
+        eyebrow="CONTENT WORKFLOW"
         title="Business Content"
-        description="Create and manage customer-facing content. Admin Web reviews and publishes submissions."
-        action={<Button onClick={() => openEditor()}><Plus size={17} />Create Content</Button>}
+        description="Manage your drafts and submissions, preview the BuzzTap feed, and create a post."
+        action={<Button onClick={openCreateForm}><Plus size={17} />Create Post</Button>}
       />
 
       {(notice || dataError) && (
-        <div role="status" className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>
+        <div role="status" className={`mb-4 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>
           {dataError ? `Database error: ${dataError}` : notice}
         </div>
       )}
 
-      <section aria-label="Content totals" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        {counts.map(({ label, status, icon: Icon, count }) => (
-          <button
-            key={status}
-            type="button"
-            onClick={() => setFilter(filter === status ? "ALL" : status)}
-            className={`${cardClass} p-4 text-left transition hover:border-[#F5C400]/40 sm:p-5 ${filter === status ? "border-[#F5C400]/60" : ""}`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-[#888] sm:text-sm">{label}</p>
-              <Icon size={17} className={filter === status ? "text-[#F5C400]" : "text-[#666]"} />
-            </div>
-            <p className="mt-2 text-2xl font-bold text-white sm:text-3xl">{dataLoading ? "—" : count}</p>
-          </button>
-        ))}
-      </section>
-
-      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-[#222] bg-[#111] p-3 sm:flex-row sm:p-4">
-        <label className="relative min-w-0 flex-1">
+      <div className="mb-5 grid gap-3 rounded-2xl border border-[#222] bg-[#111] p-3 sm:grid-cols-[minmax(0,1fr)_190px] sm:p-4">
+        <label className="relative min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666]" />
-          <input
-            className={`${inputClass} pl-9`}
-            placeholder="Search title, type, or post content"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Search business content"
-          />
+          <input className={`${inputClass} pl-9`} placeholder="Search content, type, or ID" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search business content" />
         </label>
-        <select className={`${inputClass} sm:w-52`} value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter content by status">
-          {filters.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter submissions by status">
+          <option value="WORKING">Drafts & submissions</option>
+          <option value="ALL">All my posts</option>
+          <option value="DRAFT">Draft</option>
+          <option value="PENDING_REVIEW">Pending review</option>
+          <option value="PUBLISHED">Published</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ARCHIVED">Archived</option>
+          <option value="EXPIRED">Expired</option>
         </select>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-label="Business content list" className="space-y-4">
-          {dataLoading ? (
-            <div className={`${cardClass} flex items-center justify-center gap-3 py-14 text-sm text-[#999]`}><LoaderCircle size={18} className="animate-spin text-[#F5C400]" />Loading your business content…</div>
-          ) : dataError && items.length === 0 ? (
-            <div className={`${cardClass} px-5 py-12 text-center`}>
-              <h2 className="font-semibold text-white">Content could not be loaded</h2>
-              <p className="mt-2 text-sm text-[#999]">{dataError}</p>
-            </div>
-          ) : visible.length === 0 ? (
-            <div className={`${cardClass} px-5 py-14 text-center`}>
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5C400]/10 text-[#F5C400]"><Megaphone size={21} /></div>
-              <h2 className="mt-4 font-semibold text-white">{query || filter !== "ALL" ? "No matching content" : "No content yet"}</h2>
-              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#777]">{query || filter !== "ALL" ? "Try another search or status filter." : "Create a draft or submit your first post for admin review."}</p>
-              {!query && filter === "ALL" && <button type="button" onClick={() => openEditor()} className="mt-5 text-sm font-semibold text-[#F5C400] hover:text-[#FFD83D]">Create your first post</button>}
-            </div>
-          ) : visible.map((item) => (
-            <article key={item.id || item.contentId} className={`${cardClass} p-4 sm:p-5`}>
-              <div className="flex items-start justify-between gap-3">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(330px,1.3fr)_minmax(400px,0.95fr)_minmax(340px,1fr)]">
+        <section className={`${cardClass} overflow-hidden p-0`} aria-label="Drafts and submissions">
+          <header className="border-b border-[#252525] px-4 py-4 sm:px-5">
+            <h2 className="font-semibold text-white">Drafts &amp; submissions</h2>
+            <p className="mt-1 text-xs text-[#777]">{dataLoading ? "Loading posts…" : `${filteredItems.length} ${filteredItems.length === 1 ? "post" : "posts"}`}</p>
+          </header>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-[#252525] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[#666] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:px-5">
+            <span>Post</span><span>Status</span><span className="hidden sm:block">Date</span>
+          </div>
+          <div className="max-h-[620px] divide-y divide-[#222] overflow-y-auto">
+            {dataLoading ? (
+              <div className="flex items-center justify-center gap-2 p-10 text-sm text-[#888]"><LoaderCircle size={17} className="animate-spin text-[#F5C400]" />Loading posts…</div>
+            ) : dataError && items.length === 0 ? (
+              <p className="p-6 text-sm text-red-300">Posts could not be loaded: {dataError}</p>
+            ) : filteredItems.length === 0 ? (
+              <div className="px-5 py-12 text-center">
+                <Megaphone size={20} className="mx-auto text-[#555]" />
+                <p className="mt-3 text-sm font-medium text-white">{query || statusFilter !== "WORKING" ? "No matching posts" : "No drafts or submissions yet"}</p>
+                <p className="mt-1 text-xs leading-5 text-[#777]">Create a draft or submit a post for Admin Web review.</p>
+              </div>
+            ) : filteredItems.map((item) => (
+              <article key={item.id || item.contentId} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:px-5">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#777]">{item.type || "UPDATE"}{item.contentId ? ` · ${item.contentId}` : ""}</p>
-                  <h2 className="mt-2 break-words text-lg font-semibold text-white sm:text-xl">{item.title}</h2>
+                  {canEdit(item)
+                    ? <button type="button" onClick={() => edit(item)} className="block max-w-full truncate text-left text-sm font-semibold text-white hover:text-[#F5C400]">{item.title}</button>
+                    : <p className="truncate text-sm font-semibold text-white">{item.title}</p>}
+                  <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-[#777]">{item.type || "UPDATE"}{item.contentId ? ` · ${item.contentId}` : ""}</p>
+                  <p className="mt-1 text-[10px] text-[#666] sm:hidden">{formatDate(item.created_at?.slice(0, 10) || item.startDate)}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {canEdit(item) && <>
+                      <button type="button" onClick={() => edit(item)} className="text-[10px] text-[#aaa] hover:text-white">Edit</button>
+                      <span className="text-[10px] text-[#444]">·</span>
+                    </>}
+                    <button type="button" onClick={() => duplicate(item)} disabled={busyId === item.id} className="text-[10px] text-[#aaa] hover:text-white disabled:opacity-50">Duplicate</button>
+                    {item.viewStatus !== "ARCHIVED" && (
+                      <>
+                        <span className="text-[10px] text-[#444]">·</span>
+                        <button type="button" onClick={() => updateStatus(item, "ARCHIVED")} disabled={busyId === item.id} className="text-[10px] text-[#aaa] hover:text-white disabled:opacity-50">Archive</button>
+                      </>
+                    )}
+                    {["DRAFT", "REJECTED"].includes(String(item.status).toUpperCase()) && (
+                      <>
+                        <span className="text-[10px] text-[#444]">·</span>
+                        <button type="button" onClick={async () => {
+                          setBusyId(item.id)
+                          const result = await addActivity({ ...item, status: "SUBMITTED" })
+                          setBusyId(null)
+                          setNotice(result?.success ? "Post submitted for admin review." : result?.error || "Post could not be submitted.")
+                        }} disabled={busyId === item.id} className="text-[10px] font-semibold text-[#F5C400] hover:text-[#FFD83D] disabled:opacity-50">Submit</button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <StatusBadge status={item.viewStatus} />
-              </div>
-              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-[#999]">{item.description}</p>
-              {safeMediaUrl(item.mediaUrl) && <p className="mt-3 truncate text-xs text-[#777]">Media: <a href={safeMediaUrl(item.mediaUrl)} target="_blank" rel="noreferrer" className="text-[#F5C400] hover:underline">{item.mediaUrl}</a></p>}
-              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[#777]">
-                <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} />Starts {formatDate(item.startDate)}</span>
-                <span>Ends {formatDate(item.endDate)}</span>
-              </div>
-              <div className="mt-5 flex flex-wrap gap-2 border-t border-[#242424] pt-4">
-                <ActionButton onClick={() => setPreview(item)}><Eye size={14} />Preview</ActionButton>
-                {editable(item) && <ActionButton onClick={() => openEditor(item)}>Edit</ActionButton>}
-                <ActionButton onClick={() => duplicate(item)} disabled={busyId === item.id}><Copy size={14} />Duplicate</ActionButton>
-                {["DRAFT", "REJECTED"].includes(String(item.status).toUpperCase()) && (
-                  <ActionButton onClick={() => updateStatus(item, "SUBMITTED")} disabled={busyId === item.id} accent><Send size={14} />Submit for review</ActionButton>
-                )}
-                {item.viewStatus !== "ARCHIVED" && (
-                  <ActionButton onClick={() => updateStatus(item, "ARCHIVED")} disabled={busyId === item.id}><Archive size={14} />Archive</ActionButton>
-                )}
-              </div>
-            </article>
-          ))}
+                <span className="hidden whitespace-nowrap text-[10px] text-[#777] sm:block">{formatDate(item.created_at?.slice(0, 10) || item.startDate)}</span>
+              </article>
+            ))}
+          </div>
         </section>
 
-        <aside className={`${cardClass} p-4 sm:p-5`}>
-          <div className="flex items-center justify-between">
-            <div><p className="text-sm font-semibold text-white">Published feed preview</p><p className="mt-1 text-xs text-[#777]">How active posts appear to customers</p></div>
-            <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">LIVE</span>
-          </div>
-          <div className="mx-auto mt-5 max-w-[300px] rounded-[28px] border-[5px] border-[#282828] bg-[#080808] p-3 shadow-xl">
-            <div className="mb-3 flex items-center justify-between px-1">
-              <div><p className="text-[10px] text-[#777]">BUZZTAP</p><p className="text-sm font-semibold text-white">Discover</p></div>
-              <div className="h-7 w-7 rounded-full bg-[#F5C400]/15" />
+        <section className={`${cardClass} p-4 sm:p-5`} aria-label="BuzzTap post feed preview">
+          <header className="mb-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-semibold text-white">Post preview</h2>
+              <span className="text-[10px] text-[#777]">Scroll feed</span>
             </div>
-            <div className="space-y-3">
-              {dataLoading || (dataError && items.length === 0) ? (
-                <div className="rounded-2xl border border-dashed border-[#333] px-4 py-8 text-center">
-                  <LoaderCircle size={18} className={`mx-auto ${dataLoading ? "animate-spin text-[#F5C400]" : "text-[#777]"}`} />
-                  <p className="mt-3 text-xs font-medium text-[#aaa]">{dataLoading ? "Loading published content…" : "Published content is unavailable"}</p>
+            <p className="mt-1 text-xs text-[#777]">{feedMode === "MINE" ? "Your approved posts" : "Latest BuzzTap community posts"} · {feedMode === "MINE" ? ownPublished.length : postsInFeed.length} in preview</p>
+          </header>
+          <div className="mb-3 grid grid-cols-2 rounded-xl bg-[#090909] p-1" role="group" aria-label="Choose feed posts">
+            <button type="button" onClick={() => setFeedMode("MINE")} aria-pressed={feedMode === "MINE"} className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${feedMode === "MINE" ? "bg-[#F5C400] text-black" : "text-[#888] hover:text-white"}`}>My posts</button>
+            <button type="button" onClick={() => setFeedMode("COMMUNITY")} aria-pressed={feedMode === "COMMUNITY"} className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${feedMode === "COMMUNITY" ? "bg-[#F5C400] text-black" : "text-[#888] hover:text-white"}`}>Community</button>
+          </div>
+          <div className="mx-auto w-full max-w-[360px] rounded-[36px] border-[7px] border-[#303030] bg-[#050505] p-2 shadow-xl">
+            <div className="mx-auto mb-2 h-1 w-16 rounded-full bg-[#333]" />
+            <div className="flex items-center justify-between rounded-t-[27px] bg-white px-4 py-3">
+              <div><p className="text-sm font-bold text-[#111]">BuzzTap</p></div>
+              <span className="text-[10px] font-medium text-[#666]">Business posts</span>
+            </div>
+            <div className="h-[620px] max-h-[620px] space-y-3 overflow-x-hidden overflow-y-auto rounded-b-[27px] bg-[#f3f4f6] p-2 scrollbar-thin">
+              {feedMode === "COMMUNITY" && communityLoading ? (
+                <div className="flex h-full items-center justify-center gap-2 text-xs text-[#666]"><LoaderCircle size={15} className="animate-spin text-[#F5C400]" />Loading community posts…</div>
+              ) : feedMode === "COMMUNITY" && communityError ? (
+                <div className="rounded-xl border border-red-200 bg-white p-4 text-center text-xs leading-5 text-red-600">Community posts are unavailable: {communityError}</div>
+              ) : postsInFeed.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#d1d5db] bg-white px-4 py-10 text-center">
+                  <Megaphone size={19} className="mx-auto text-[#9ca3af]" />
+                  <p className="mt-3 text-xs font-medium text-[#374151]">{feedMode === "MINE" ? "No published posts yet" : "No community posts yet"}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-[#6b7280]">{feedMode === "MINE" ? "Your posts appear here after Admin Web approves them." : "Approved business posts will appear here."}</p>
                 </div>
-              ) : feedItems.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#333] px-4 py-8 text-center">
-                  <Megaphone size={18} className="mx-auto text-[#555]" />
-                  <p className="mt-3 text-xs font-medium text-[#aaa]">No published posts yet</p>
-                  <p className="mt-1 text-[10px] leading-4 text-[#666]">Once Admin Web approves your content, it will show here.</p>
-                </div>
-              ) : feedItems.map((item) => (
-                <article key={item.id || item.contentId} className="overflow-hidden rounded-2xl border border-[#242424] bg-[#151515]">
-                  {safeMediaUrl(item.mediaUrl) ? (
-                    <img src={safeMediaUrl(item.mediaUrl)} alt="" className="h-32 w-full object-cover" />
-                  ) : (
-                    <div className="flex h-24 items-center justify-center bg-gradient-to-br from-[#F5C400]/20 to-[#211d08]"><FileImage size={23} className="text-[#F5C400]/70" /></div>
+              ) : postsInFeed.map((item) => (
+                <article key={item.id || item.contentId} className="overflow-hidden rounded-xl border border-[#d1d5db] bg-white text-[#111827] shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
+                  {item.isDraftPreview && (
+                    <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-medium text-amber-800">
+                      Live draft preview · not published
+                    </div>
                   )}
-                  <div className="p-3">
-                    <p className="text-[9px] font-semibold uppercase tracking-wider text-[#F5C400]">{item.type || "UPDATE"}</p>
-                    <h3 className="mt-1.5 line-clamp-2 text-sm font-semibold text-white">{item.title}</h3>
-                    <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap text-[11px] leading-5 text-[#999]">{item.description}</p>
-                    {item.callToAction && <span className="mt-3 inline-block rounded-lg bg-[#F5C400] px-3 py-1.5 text-[10px] font-semibold text-black">{item.callToAction}</span>}
-                    <p className="mt-3 text-[9px] text-[#666]">{formatDate(item.startDate)}{item.endDate ? ` – ${formatDate(item.endDate)}` : ""}</p>
+                  <div className="flex items-center gap-2.5 p-3 pb-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F5C400] text-xs font-black text-black">{feedMode === "MINE" ? "B" : (item.business_id === business?.id ? "B" : "BT")}</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-[#111827]">{feedMode === "MINE" ? business?.name || "Your business" : item.business_id === business?.id ? business?.name || "Your business" : "BuzzTap Community"}</p>
+                      <p className="text-[10px] text-[#6b7280]">{formatDate(item.created_at?.slice(0, 10) || item.startDate)} | {statusLabel(item.viewStatus || contentStatus(item))}</p>
+                    </div>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setOpenMenuId(openMenuId === (item.id || item.contentId) ? null : (item.id || item.contentId))}
+                        aria-label="Post options"
+                        aria-expanded={openMenuId === (item.id || item.contentId)}
+                        className="rounded-full p-1 text-[#6b7280] hover:bg-[#f3f4f6]"
+                      >
+                        <MoreHorizontal size={17} />
+                      </button>
+                      {openMenuId === (item.id || item.contentId) && (
+                        <div className="absolute right-0 top-8 z-10 min-w-32 rounded-lg border border-[#e5e7eb] bg-white p-1 shadow-lg">
+                          {safeMediaUrl(item.mediaUrl)
+                            ? <a href={safeMediaUrl(item.mediaUrl)} target="_blank" rel="noreferrer" className="block rounded-md px-2.5 py-2 text-[10px] text-[#374151] hover:bg-[#f3f4f6]">Open media</a>
+                            : <span className="block px-2.5 py-2 text-[10px] text-[#9ca3af]">No additional options</span>}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  <div className="px-3 pb-3">
+                    <p className="text-sm font-bold text-[#111827]">{item.title}</p>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-[#374151]">{item.description}</p>
+                  </div>
+                  <FeedMedia key={`${item.id || item.contentId}-${item.mediaUrl || "no-media"}`} url={safeMediaUrl(item.mediaUrl)} title={item.title} />
+                  <div className="mx-3 flex justify-around border-t border-[#e5e7eb] py-2.5 text-[10px] text-[#4b5563]"><span>Like</span><span>Comment</span><span>Share</span></div>
+                  {item.callToAction && <div className="px-3 pb-3"><span className="block rounded-md bg-blue-600 px-3 py-2.5 text-center text-xs font-semibold text-white">{item.callToAction}</span></div>}
                 </article>
               ))}
             </div>
           </div>
-        </aside>
-      </div>
+          <p className="mt-3 text-center text-[10px] leading-4 text-[#666]">Only posts published by Admin Web appear in this feed.</p>
+        </section>
 
-      {editor && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-6" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setEditor(null) }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="content-editor-title" className="my-auto w-full max-w-2xl rounded-2xl border border-[#333] bg-[#111] p-5 shadow-2xl sm:p-7">
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div><p className="text-xs font-semibold uppercase tracking-wider text-[#F5C400]">{editor.id ? "Manage your post" : "New post"}</p><h2 id="content-editor-title" className="mt-1 text-xl font-semibold text-white">{editor.id ? "Edit Content" : "Create Content"}</h2><p className="mt-1 text-sm text-[#777]">Submitted posts go to Admin Web for review and publishing.</p></div>
-              <button type="button" onClick={() => setEditor(null)} disabled={saving} aria-label="Close editor" className="rounded-lg p-2 text-[#888] hover:bg-[#222] hover:text-white disabled:opacity-50"><X size={18} /></button>
+        <section ref={formPanel} className={`${cardClass} scroll-mt-6 p-4 sm:p-5`} aria-label="Create BuzzTap post">
+          <header className="mb-4 border-b border-[#292929] pb-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-semibold text-white">{editor ? "Edit Post" : "Create BuzzTap post"}</h2>
+              {editor && <button type="button" onClick={() => { setEditor(null); setPreviewDraft(null); setResetForm((value) => value + 1) }} className="text-xs text-[#F5C400] hover:text-[#FFD83D]">Cancel edit</button>}
             </div>
-            <form onSubmit={(event) => save(event)} className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Content Type">
-                  <select className={inputClass} name="type" defaultValue={editor.type || "UPDATE"}>
-                    <option value="UPDATE">Update</option><option value="PROMOTION">Promotion</option><option value="EVENT">Event</option><option value="ADVERTISEMENT">Advertisement</option>
-                  </select>
-                </Field>
-                <Field label="Title"><input className={inputClass} name="title" required maxLength="160" defaultValue={editor.title} placeholder="Give your post a title" /></Field>
-              </div>
-              <Field label="Post Content"><textarea className={inputClass} name="description" required rows="5" maxLength="5000" defaultValue={editor.description} placeholder="Write the message customers will see…" /></Field>
-              <Field label="Media URL"><input className={inputClass} name="mediaUrl" type="url" maxLength="2048" defaultValue={editor.mediaUrl} placeholder="https://…" /></Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Start Date"><input className={inputClass} name="startDate" required type="date" defaultValue={editor.startDate || today()} /></Field>
-                <Field label="End Date (Optional)"><input className={inputClass} name="endDate" type="date" min={editor.startDate || today()} defaultValue={editor.endDate} /></Field>
-              </div>
-              <Field label="Call-To-Action Label (Optional)"><input className={inputClass} name="callToAction" maxLength="80" defaultValue={editor.callToAction} placeholder="e.g. Visit us today" /></Field>
-              <div className="flex flex-col-reverse gap-3 border-t border-[#242424] pt-4 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => setEditor(null)} disabled={saving} className="rounded-xl border border-[#333] px-4 py-3 text-sm font-semibold text-[#ccc] hover:bg-[#1b1b1b] disabled:opacity-50">Cancel</button>
-                <Button type="submit" secondary disabled={saving}>{saving ? <LoaderCircle size={16} className="animate-spin" /> : null}Save Draft</Button>
-                {editorCanSubmit && <Button type="button" onClick={(event) => save(event, true)} disabled={saving}>{saving ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}Submit for Review</Button>}
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
-
-      {preview && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/80 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null) }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="preview-title" className="w-full max-w-sm rounded-2xl border border-[#333] bg-[#111] p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between"><h2 id="preview-title" className="font-semibold text-white">Customer Preview</h2><button type="button" onClick={() => setPreview(null)} aria-label="Close preview" className="rounded-lg p-2 text-[#888] hover:bg-[#222] hover:text-white"><X size={18} /></button></div>
-            <article className="overflow-hidden rounded-2xl border border-[#292929] bg-[#171717]">
-              {safeMediaUrl(preview.mediaUrl) ? <img src={safeMediaUrl(preview.mediaUrl)} alt="" className="h-40 w-full object-cover" /> : <div className="flex h-36 items-center justify-center bg-gradient-to-br from-[#F5C400]/20 to-[#211d08]"><FileImage size={28} className="text-[#F5C400]/70" /></div>}
-              <div className="p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#F5C400]">{preview.type}</p>
-                <h3 className="mt-2 text-xl font-bold text-white">{preview.title}</h3>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#aaa]">{preview.description}</p>
-                {preview.callToAction && <span className="mt-4 inline-block rounded-lg bg-[#F5C400] px-3 py-2 text-xs font-semibold text-black">{preview.callToAction}</span>}
-                <p className="mt-4 text-[11px] text-[#666]">{formatDate(preview.startDate)}{preview.endDate ? ` – ${formatDate(preview.endDate)}` : " · Ongoing"}</p>
-              </div>
-            </article>
-          </section>
-        </div>
-      )}
+            <p className="mt-1 text-xs leading-5 text-[#777]">{editor ? "Update a draft or pending submission." : "Save a draft or submit a post to Admin Web for approval."}</p>
+          </header>
+          <form key={`${editor?.id || "new"}-${resetForm}`} onInput={updateDraftPreview} onChange={updateDraftPreview} onSubmit={(event) => save(event)} className="space-y-3.5">
+            <Field label="Title"><input className={inputClass} name="title" required maxLength="160" defaultValue={editor?.title || ""} placeholder="Post title" /></Field>
+            <Field label="Content Type">
+              <select className={inputClass} name="type" defaultValue={editor?.type || "UPDATE"}>
+                <option value="UPDATE">Update</option><option value="PROMOTION">Promotion</option><option value="EVENT">Event</option><option value="ADVERTISEMENT">Advertisement</option>
+              </select>
+            </Field>
+            <Field label="Post Content"><textarea className={inputClass} name="description" required rows="5" maxLength="5000" defaultValue={editor?.description || ""} placeholder="Write the post…" /></Field>
+            <Field label="Media URL"><input className={inputClass} name="mediaUrl" type="url" maxLength="2048" defaultValue={editor?.mediaUrl || ""} placeholder="https://…" /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Start Date"><input className={inputClass} name="startDate" required type="date" defaultValue={editor?.startDate || today()} /></Field>
+              <Field label="End Date"><input className={inputClass} name="endDate" type="date" min={editor?.startDate || today()} defaultValue={editor?.endDate || ""} /></Field>
+            </div>
+            <Field label="Call To Action"><input className={inputClass} name="callToAction" maxLength="80" defaultValue={editor?.callToAction || ""} placeholder="Optional button label" /></Field>
+            <div className="space-y-2 pt-1">
+                  <Button type="submit" secondary disabled={saving}>{saving ? <LoaderCircle size={15} className="animate-spin" /> : null}Save draft</Button>
+              {editorCanSubmit && (
+                <button type="button" onClick={(event) => save(event, true)} disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F5C400] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#FFD83D] disabled:cursor-not-allowed disabled:opacity-50">
+                  {saving ? <LoaderCircle size={15} className="animate-spin" /> : <Send size={15} />}
+                  Submit for Admin Review
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] leading-4 text-[#666]">Businesses can submit posts and manage drafts. Admin Web alone can approve and publish them to the community feed.</p>
+          </form>
+        </section>
+      </div>
     </div>
   )
 }
