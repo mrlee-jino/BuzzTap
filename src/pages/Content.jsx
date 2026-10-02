@@ -148,7 +148,7 @@ function Content() {
   useEffect(() => {
     let cancelled = false
     async function loadCommunityPosts() {
-      if (!business?.id) {
+      if (!business?.id || feedMode !== "COMMUNITY") {
         setCommunityPosts([])
         setCommunityLoading(false)
         return
@@ -158,12 +158,7 @@ function Content() {
       let data
       let error
       try {
-        ({ data, error } = await supabase
-          .from("content_items")
-          .select("id,business_id,content_id,title,content,description,type,start_date,end_date,media_url,call_to_action,status,created_at")
-          .eq("status", "PUBLISHED")
-          .order("created_at", { ascending: false })
-          .limit(50))
+        ({ data, error } = await supabase.rpc("get_published_business_content"))
       } catch (requestError) {
         if (cancelled) return
         setCommunityError(requestError instanceof Error ? requestError.message : "The community feed request failed.")
@@ -184,22 +179,21 @@ function Content() {
           endDate: item.end_date || "",
           mediaUrl: item.media_url || "",
           callToAction: item.call_to_action || "",
+          businessName: item.business_name || "",
         })))
       }
       setCommunityLoading(false)
     }
     loadCommunityPosts()
     return () => { cancelled = true }
-  }, [activities, business?.id])
+  }, [business?.id, feedMode])
 
   const ownPublished = items.filter((item) => item.viewStatus === "PUBLISHED"
     && (!item.startDate || item.startDate <= today())
     && (!item.endDate || item.endDate >= today()))
   const postsInFeed = feedMode === "MINE"
     ? [...(previewDraft ? [previewDraft] : []), ...ownPublished]
-    : communityPosts.filter((item) => item.business_id !== business?.id
-      && (!item.startDate || item.startDate <= today())
-      && (!item.endDate || item.endDate >= today()))
+    : communityPosts
   const editorCanSubmit = !editor?.id || ["DRAFT", "REJECTED"].includes(String(editor.status).toUpperCase())
   const canEdit = (item) => ["DRAFT", "REJECTED"].includes(String(item.status).toUpperCase())
 
@@ -321,6 +315,12 @@ function Content() {
       id: editor?.id || "local-draft-preview",
     })
   }
+  const setCommunityTab = () => {
+    if (feedMode === "COMMUNITY") return
+    setCommunityLoading(true)
+    setCommunityError("")
+    setFeedMode("COMMUNITY")
+  }
 
   return (
     <div className="mx-auto max-w-[1700px]">
@@ -420,11 +420,11 @@ function Content() {
               <h2 className="font-semibold text-white">Post preview</h2>
               <span className="text-[10px] text-[#777]">Scroll feed</span>
             </div>
-            <p className="mt-1 text-xs text-[#777]">{feedMode === "MINE" ? "Your approved posts" : "Latest BuzzTap community posts"} · {feedMode === "MINE" ? ownPublished.length : postsInFeed.length} in preview</p>
+            <p className="mt-1 text-xs text-[#777]">{feedMode === "MINE" ? "Your published posts" : "Published BuzzTap community posts"} · {feedMode === "MINE" ? ownPublished.length : postsInFeed.length} posts</p>
           </header>
           <div className="mb-3 grid grid-cols-2 rounded-xl bg-[#090909] p-1" role="group" aria-label="Choose feed posts">
             <button type="button" onClick={() => setFeedMode("MINE")} aria-pressed={feedMode === "MINE"} className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${feedMode === "MINE" ? "bg-[#F5C400] text-black" : "text-[#888] hover:text-white"}`}>My posts</button>
-            <button type="button" onClick={() => setFeedMode("COMMUNITY")} aria-pressed={feedMode === "COMMUNITY"} className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${feedMode === "COMMUNITY" ? "bg-[#F5C400] text-black" : "text-[#888] hover:text-white"}`}>Community</button>
+            <button type="button" onClick={setCommunityTab} aria-pressed={feedMode === "COMMUNITY"} className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${feedMode === "COMMUNITY" ? "bg-[#F5C400] text-black" : "text-[#888] hover:text-white"}`}>Community</button>
           </div>
           <div className="mx-auto w-full max-w-[360px] rounded-[36px] border-[7px] border-[#303030] bg-[#050505] p-2 shadow-xl">
             <div className="mx-auto mb-2 h-1 w-16 rounded-full bg-[#333]" />
@@ -451,10 +451,12 @@ function Content() {
                     </div>
                   )}
                   <div className="flex items-center gap-2.5 p-3 pb-2">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F5C400] text-xs font-black text-black">{feedMode === "MINE" ? "B" : (item.business_id === business?.id ? "B" : "BT")}</div>
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F5C400] text-xs font-black text-black">
+                      {(feedMode === "MINE" ? business?.name : item.businessName || (item.business_id === business?.id ? business?.name : ""))?.trim()?.slice(0, 1)?.toUpperCase() || "B"}
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-[#111827]">{feedMode === "MINE" ? business?.name || "Your business" : item.business_id === business?.id ? business?.name || "Your business" : "BuzzTap Community"}</p>
-                      <p className="text-[10px] text-[#6b7280]">{formatDate(item.created_at?.slice(0, 10) || item.startDate)} | {statusLabel(item.viewStatus || contentStatus(item))}</p>
+                      <p className="truncate text-xs font-semibold text-[#111827]">{feedMode === "MINE" ? business?.name || "Your business" : item.businessName || (item.business_id === business?.id ? business?.name : "") || "BuzzTap Community"}</p>
+                      <p className="text-[10px] text-[#6b7280]">{formatDate(item.created_at?.slice(0, 10) || item.startDate)} | {statusLabel(item.status || item.viewStatus || contentStatus(item))}</p>
                     </div>
                     <div className="relative">
                       <button
