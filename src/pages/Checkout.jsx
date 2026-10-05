@@ -16,9 +16,13 @@ export default function Checkout() {
           </div>
         </div>
 
+        <p role="status" className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+          Online subscription payment is not connected yet. No charge will be made from this page.
+        </p>
+
         <div className="mt-8 flex gap-3">
           <a href="/subscribe" className="rounded-xl border border-[#333] px-4 py-3 text-sm text-white">Back</a>
-          <button className="rounded-xl bg-[#F5C400] px-6 py-3 font-semibold text-black">Complete Purchase</button>
+          <button type="button" disabled className="cursor-not-allowed rounded-xl bg-[#F5C400] px-6 py-3 font-semibold text-black opacity-50">Payments not configured</button>
         </div>
       </div>
     </main>

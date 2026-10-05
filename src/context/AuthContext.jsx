@@ -288,11 +288,21 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function changePassword(password) {
+  async function changePassword(currentPassword, newPassword) {
     setError(null)
 
+    const { error: verificationError } = await supabase.auth.signInWithPassword({
+      email: user?.email || "",
+      password: currentPassword,
+    })
+
+    if (verificationError) {
+      setError(verificationError.message)
+      return { success: false, error: verificationError }
+    }
+
     const { error: passwordError } = await supabase.auth.updateUser({
-      password,
+      password: newPassword,
     })
 
     if (passwordError) {

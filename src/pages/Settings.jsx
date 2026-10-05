@@ -32,17 +32,33 @@ const requirementList = [
 ]
 
 function Settings({ changePassword }) {
-  const {
-    business,
-    profile,
-    staff,
-    accessLogs,
-    addStaff,
-    updateStaffStatus,
-    deleteStaff,
-  } = useBusiness()
+  const businessData = useBusiness()
+  const settingsKey = `${businessData.business?.id || ""}:${businessData.dataLoading ? "loading" : JSON.stringify(businessData.notificationPreferences)}`
+  return <SettingsPanel key={settingsKey} changePassword={changePassword} {...businessData} />
+}
 
-  const [saved, setSaved] = useState(false)
+function SettingsPanel({
+  business,
+  profile,
+  notificationPreferences,
+  staff,
+  accessLogs,
+  addStaff,
+  updateStaffStatus,
+  deleteStaff,
+  saveBusinessSettings,
+  dataLoading,
+  dataError,
+  changePassword,
+}) {
+  const [businessForm, setBusinessForm] = useState({
+    name: business?.name || "",
+    email: business?.email || "",
+    phone: business?.phone || "",
+    address: business?.address || "",
+  })
+  const [notificationForm, setNotificationForm] = useState(notificationPreferences)
+  const [saving, setSaving] = useState(false)
   const [staffModal, setStaffModal] = useState(false)
   const [passwordModal, setPasswordModal] = useState(false)
   const [notice, setNotice] = useState("")
@@ -59,6 +75,25 @@ function Settings({ changePassword }) {
     next: false,
     confirm: false,
   })
+
+  const saveSettings = async () => {
+    if (!businessForm.name.trim() || !businessForm.phone.trim() || !businessForm.address.trim()) {
+      setNotice("Business name, phone, and address are required.")
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessForm.email.trim())) {
+      setNotice("Enter a valid business email address.")
+      return
+    }
+    setSaving(true)
+    setNotice("")
+    const result = await saveBusinessSettings({
+      ...businessForm,
+      notifications: notificationForm,
+    })
+    setSaving(false)
+    setNotice(result.success ? "Business settings saved." : result.error || "Business settings could not be saved.")
+  }
 
   const invite = async (event) => {
     event.preventDefault()
@@ -134,7 +169,7 @@ function Settings({ changePassword }) {
       return
     }
 
-    const result = await changePassword(passwords.next)
+    const result = await changePassword(passwords.current, passwords.next)
     setNotice(
       result.success
         ? "Password changed successfully."
@@ -194,13 +229,6 @@ function Settings({ changePassword }) {
     </Field>
   )
 
-  const businessName = business?.name || ""
-  const businessContact =
-    business?.email ||
-    business?.phone ||
-    business?.address ||
-    ""
-
   const ownerName = profile?.full_name || profile?.email || ""
   const visibleAccessLogs = accessLogs
     .filter((entry) =>
@@ -219,16 +247,16 @@ function Settings({ changePassword }) {
         title="Settings"
         description="Manage your business profile, notifications, security, and staff access."
         action={
-          <Button onClick={() => setSaved(true)}>
+          <Button onClick={saveSettings} disabled={saving || dataLoading || !business?.id}>
             <Save size={17} />
-            Save Changes
+            {saving ? "Saving…" : "Save Changes"}
           </Button>
         }
       />
 
-      {(saved || notice) && (
-        <p className="mb-5 rounded-xl border border-[#F5C400]/30 bg-[#F5C400]/10 p-3 text-sm text-[#F5C400]">
-          {notice || "Business profile is currently read-only."}
+      {(notice || dataError) && (
+        <p role={dataError ? "alert" : "status"} className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>
+          {dataError ? `Database error: ${dataError}` : notice}
         </p>
      )}
 
@@ -257,9 +285,10 @@ function Settings({ changePassword }) {
             <Field label="Business Name">
               <input
                 className={inputClass}
-                value={businessName}
-                readOnly
+                value={businessForm.name}
+                onChange={(event) => setBusinessForm((current) => ({ ...current, name: event.target.value }))}
                 placeholder="Business name unavailable"
+                required
               />
             </Field>
 
@@ -273,12 +302,35 @@ function Settings({ changePassword }) {
             </Field>
 
             <Field label="Contact Information">
-              <input
-                className={inputClass}
-                value={businessContact}
-                readOnly
-                placeholder="Contact information unavailable"
-              />
+              <div className="space-y-3">
+                <input
+                  className={inputClass}
+                  type="email"
+                  value={businessForm.email}
+                  onChange={(event) => setBusinessForm((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="Business email"
+                  aria-label="Business email"
+                  required
+                />
+                <input
+                  className={inputClass}
+                  type="tel"
+                  value={businessForm.phone}
+                  onChange={(event) => setBusinessForm((current) => ({ ...current, phone: event.target.value }))}
+                  placeholder="Business phone"
+                  aria-label="Business phone"
+                  required
+                />
+                <textarea
+                  className={inputClass}
+                  value={businessForm.address}
+                  onChange={(event) => setBusinessForm((current) => ({ ...current, address: event.target.value }))}
+                  placeholder="Business address"
+                  aria-label="Business address"
+                  rows="2"
+                  required
+                />
+              </div>
             </Field>
           </div>
         </section>
@@ -293,11 +345,11 @@ function Settings({ changePassword }) {
           </div>
 
           {[
-            "Transaction alerts",
-            "Settlement updates",
-            "Content moderation",
-            "Low BP inventory",
-          ].map((label) => (
+            ["Transaction alerts", "transactionAlerts"],
+            ["Settlement updates", "settlementUpdates"],
+            ["Content moderation", "contentModeration"],
+            ["Low BP inventory", "lowPointInventory"],
+          ].map(([label, key]) => (
             <label
               className="flex items-center justify-between border-b border-[#242424] py-4 text-sm text-[#AAA]"
               key={label}
@@ -306,7 +358,8 @@ function Settings({ changePassword }) {
 
               <input
                 type="checkbox"
-                defaultChecked
+                checked={Boolean(notificationForm[key])}
+                onChange={(event) => setNotificationForm((current) => ({ ...current, [key]: event.target.checked }))}
                 className="h-4 w-4 accent-[#F5C400]"
               />
             </label>
@@ -502,8 +555,7 @@ function Settings({ changePassword }) {
           </button>
 
           <p className="mt-4 text-xs text-[#666]">
-            Password changes are unavailable until backend
-            security is connected.
+            Password changes are handled by your authenticated Supabase account.
           </p>
         </section>
       </div>
@@ -584,8 +636,7 @@ function Settings({ changePassword }) {
           onClose={closePassword}
         >
           <p className="mb-6 text-sm text-[#888]">
-            Update your password after backend authentication
-            is connected.
+            Update the password for your authenticated account.
           </p>
 
           <form

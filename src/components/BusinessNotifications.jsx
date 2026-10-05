@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { Bell, Check, LoaderCircle, RefreshCw } from "lucide-react"
+import { useBusiness } from "../businessContext"
 import { supabase } from "../lib/supabaseClient"
 
 function formatDate(value) {
@@ -14,6 +15,7 @@ function formatDate(value) {
 }
 
 export default function BusinessNotifications({ businessId }) {
+  const { notificationPreferences } = useBusiness()
   const [notifications, setNotifications] = useState([])
   const [notificationsBusinessId, setNotificationsBusinessId] = useState(null)
   const [loading, setLoading] = useState(Boolean(businessId))
@@ -40,7 +42,7 @@ export default function BusinessNotifications({ businessId }) {
 
       const { data, error } = await supabase
         .from("business_notifications")
-        .select("id, business_id, title, message, created_at, read_at")
+        .select("id, business_id, title, message, category, created_at, read_at")
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
 
@@ -65,8 +67,15 @@ export default function BusinessNotifications({ businessId }) {
     }
   }, [businessId, refreshKey])
 
-  const visibleNotifications =
-    notificationsBusinessId === businessId ? notifications : []
+  const enabledCategories = {
+    TRANSACTION: notificationPreferences.transactionAlerts,
+    SETTLEMENT: notificationPreferences.settlementUpdates,
+    CONTENT: notificationPreferences.contentModeration,
+    INVENTORY: notificationPreferences.lowPointInventory,
+  }
+  const visibleNotifications = notificationsBusinessId === businessId
+    ? notifications.filter((item) => !item.category || enabledCategories[item.category] !== false)
+    : []
   const unreadCount = visibleNotifications.filter((item) => !item.read_at).length
 
   async function markAsRead(notification) {
