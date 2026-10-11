@@ -212,7 +212,11 @@ export function BusinessProvider({ children, selectedMembership }) {
   const updateCustomerStatus = (id, status) => update("customers", id, { status })
   const addProduct = (values) => mutate("products_services", { id: values.id, name: values.name, description: values.description, category: values.category, price: values.price, stock: values.stock })
   const updateProductStatus = (id, status) => update("products_services", id, { status })
-  const addWorkstation = (values) => mutate("workstations", values)
+  const addWorkstation = ({ id, ...values }) => mutate("workstations", {
+    ...values,
+    id: crypto.randomUUID(),
+    workstation_code: id.trim(),
+  })
   const updateWorkstationStatus = (id, status) => update("workstations", id, { status })
   const addCard = (values) => mutate("nfc_cards", { id: values.id, customer_id: values.customerId, status: values.status || "ACTIVE" })
   const updateCardStatus = (id, status) => update("nfc_cards", id, { status })

@@ -11,6 +11,7 @@ import {
 import { useBusiness } from "../businessContext"
 import { Button, Field, PageHeader, cardClass, inputClass } from "../components/BusinessUI"
 import { supabase } from "../lib/supabaseClient"
+import { communityPost, isRunningPost } from "../lib/communityFeed"
 
 const today = () => {
   const date = new Date()
@@ -28,10 +29,10 @@ function safeMediaUrl(value) {
   }
 }
 
-function contentStatus(item) {
+function contentStatus(item, date = today()) {
   const status = String(item.status || "DRAFT").toUpperCase()
   if (status === "ARCHIVED") return status
-  if (status === "PUBLISHED" && item.endDate && item.endDate < today()) return "EXPIRED"
+  if (status === "PUBLISHED" && item.endDate && item.endDate < date) return "EXPIRED"
   if (["SUBMITTED", "PENDING", "PENDING_REVIEW"].includes(status)) return "PENDING_REVIEW"
   return status
 }
@@ -118,9 +119,12 @@ function Content() {
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("WORKING")
   const [feedMode, setFeedMode] = useState("MINE")
+  const [myPostsMode, setMyPostsMode] = useState("RUNNING")
   const [communityPosts, setCommunityPosts] = useState([])
   const [communityLoading, setCommunityLoading] = useState(true)
   const [communityError, setCommunityError] = useState("")
+  const [feedDate, setFeedDate] = useState(today)
+  const [communityRefresh, setCommunityRefresh] = useState(0)
   const [editor, setEditor] = useState(null)
   const [previewDraft, setPreviewDraft] = useState(null)
   const [openMenuId, setOpenMenuId] = useState(null)
@@ -131,8 +135,8 @@ function Content() {
   const formPanel = useRef(null)
 
   const items = useMemo(
-    () => activities.map((item) => ({ ...item, viewStatus: contentStatus(item) })),
-    [activities],
+    () => activities.map((item) => ({ ...item, viewStatus: contentStatus(item, feedDate) })),
+    [activities, feedDate],
   )
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -144,6 +148,28 @@ function Content() {
       return matchesStatus && matchesSearch
     })
   }, [items, query, statusFilter])
+
+  useEffect(() => {
+    let midnightTimer
+    const refresh = () => {
+      setFeedDate(today())
+      setCommunityRefresh((value) => value + 1)
+    }
+    const schedule = () => {
+      const next = new Date()
+      next.setHours(24, 0, 0, 0)
+      midnightTimer = setTimeout(() => { refresh(); schedule() }, next.getTime() - Date.now() + 100)
+    }
+    const visible = () => { if (document.visibilityState === "visible") refresh() }
+    schedule()
+    window.addEventListener("focus", refresh)
+    document.addEventListener("visibilitychange", visible)
+    return () => {
+      clearTimeout(midnightTimer)
+      window.removeEventListener("focus", refresh)
+      document.removeEventListener("visibilitychange", visible)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -158,7 +184,22 @@ function Content() {
       let data
       let error
       try {
-        ({ data, error } = await supabase.rpc("get_published_business_content"))
+        const date = today()
+        ;({ data, error } = await supabase.from("content_items")
+          .select("id,business_id,title,content,description,type,status,media_url,start_date,end_date,call_to_action,created_at,updated_at")
+          .eq("status", "PUBLISHED")
+          .or(`start_date.is.null,start_date.lte.${date}`)
+          .or(`end_date.is.null,end_date.gte.${date}`)
+          .order("created_at", { ascending: false }))
+        if (!error) {
+          const ids = [...new Set((data || []).map((item) => item.business_id).filter(Boolean))]
+          const nameResult = ids.length
+            ? await supabase.rpc("get_community_business_names", { p_business_ids: ids })
+            : { data: [], error: null }
+          if (nameResult.error) throw new Error(`Business names could not be loaded: ${nameResult.error.message}`)
+          const names = new Map((nameResult.data || []).map((item) => [item.id, item.name]))
+          data = (data || []).map((item) => communityPost(item, names))
+        }
       } catch (requestError) {
         if (cancelled) return
         setCommunityError(requestError instanceof Error ? requestError.message : "The community feed request failed.")
@@ -171,29 +212,21 @@ function Content() {
         setCommunityError(error.message)
         setCommunityPosts([])
       } else {
-        setCommunityPosts((data || []).map((item) => ({
-          ...item,
-          contentId: item.content_id || item.id,
-          description: item.description || item.content || "",
-          startDate: item.start_date || "",
-          endDate: item.end_date || "",
-          mediaUrl: item.media_url || "",
-          callToAction: item.call_to_action || "",
-          businessName: item.business_name || "",
-        })))
+        setCommunityPosts(data || [])
       }
       setCommunityLoading(false)
     }
     loadCommunityPosts()
     return () => { cancelled = true }
-  }, [business?.id, feedMode])
+  }, [business?.id, feedMode, communityRefresh])
 
-  const ownPublished = items.filter((item) => item.viewStatus === "PUBLISHED"
-    && (!item.startDate || item.startDate <= today())
-    && (!item.endDate || item.endDate >= today()))
+  const ownPublished = items.filter((item) => isRunningPost(item, feedDate))
+  const runningCommunityPosts = communityPosts.filter((item) => isRunningPost(item, feedDate))
+  const ownArchived = items.filter((item) => ["ARCHIVED", "EXPIRED"].includes(item.viewStatus))
+  const ownFeedPosts = myPostsMode === "ARCHIVE" ? ownArchived : ownPublished
   const postsInFeed = feedMode === "MINE"
-    ? [...(previewDraft ? [previewDraft] : []), ...ownPublished]
-    : communityPosts
+    ? [...(previewDraft && myPostsMode === "RUNNING" ? [previewDraft] : []), ...ownFeedPosts]
+    : runningCommunityPosts
   const editorCanSubmit = !editor?.id || ["DRAFT", "REJECTED"].includes(String(editor.status).toUpperCase())
   const canEdit = (item) => ["DRAFT", "REJECTED"].includes(String(item.status).toUpperCase())
 
@@ -201,6 +234,7 @@ function Content() {
     setEditor(null)
     setPreviewDraft(null)
     setFeedMode("MINE")
+    setMyPostsMode("RUNNING")
     setResetForm((value) => value + 1)
     formPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
@@ -285,6 +319,7 @@ function Content() {
     setNotice("")
     setEditor(item)
     setFeedMode("MINE")
+    setMyPostsMode("RUNNING")
     setPreviewDraft({ ...item, viewStatus: contentStatus(item), isDraftPreview: true })
     formPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
@@ -316,9 +351,10 @@ function Content() {
     })
   }
   const setCommunityTab = () => {
-    if (feedMode === "COMMUNITY") return
     setCommunityLoading(true)
     setCommunityError("")
+    setFeedDate(today())
+    setCommunityRefresh((value) => value + 1)
     setFeedMode("COMMUNITY")
   }
 
@@ -343,7 +379,6 @@ function Content() {
           <input className={`${inputClass} pl-9`} placeholder="Search content, type, or ID" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search business content" />
         </label>
         <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter submissions by status">
-          <option value="WORKING">Drafts & submissions</option>
           <option value="ALL">All my posts</option>
           <option value="DRAFT">Draft</option>
           <option value="PENDING_REVIEW">Pending review</option>
@@ -420,12 +455,19 @@ function Content() {
               <h2 className="font-semibold text-white">Post preview</h2>
               <span className="text-[10px] text-[#777]">Scroll feed</span>
             </div>
-            <p className="mt-1 text-xs text-[#777]">{feedMode === "MINE" ? "Your published posts" : "Published BuzzTap community posts"} · {feedMode === "MINE" ? ownPublished.length : postsInFeed.length} posts</p>
+            <p className="mt-1 text-xs text-[#777]">{feedMode === "MINE" ? `${myPostsMode === "ARCHIVE" ? "Your archived and expired posts" : "Your running posts"} · ${ownFeedPosts.length} posts` : communityLoading ? "Loading running community posts…" : communityError ? "Community feed unavailable" : `Running business and admin posts · ${postsInFeed.length} posts`}</p>
           </header>
           <div className="mb-3 grid grid-cols-2 rounded-xl bg-[#090909] p-1" role="group" aria-label="Choose feed posts">
             <button type="button" onClick={() => setFeedMode("MINE")} aria-pressed={feedMode === "MINE"} className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${feedMode === "MINE" ? "bg-[#F5C400] text-black" : "text-[#888] hover:text-white"}`}>My posts</button>
             <button type="button" onClick={setCommunityTab} aria-pressed={feedMode === "COMMUNITY"} className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${feedMode === "COMMUNITY" ? "bg-[#F5C400] text-black" : "text-[#888] hover:text-white"}`}>Community</button>
           </div>
+          {feedMode === "MINE" && (
+            <div className="mb-3 grid grid-cols-2 gap-2" role="group" aria-label="Filter my posts">
+              {[ ["RUNNING", "Running Posts"], ["ARCHIVE", "Archive"] ].map(([mode, label]) => (
+                <button key={mode} type="button" onClick={() => { setMyPostsMode(mode); setOpenMenuId(null) }} aria-pressed={myPostsMode === mode} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${myPostsMode === mode ? "border-[#F5C400] bg-[#F5C400]/10 text-[#F5C400]" : "border-[#292929] text-[#888] hover:text-white"}`}>{label}</button>
+              ))}
+            </div>
+          )}
           <div className="mx-auto w-full max-w-[360px] rounded-[36px] border-[7px] border-[#303030] bg-[#050505] p-2 shadow-xl">
             <div className="mx-auto mb-2 h-1 w-16 rounded-full bg-[#333]" />
             <div className="flex items-center justify-between rounded-t-[27px] bg-white px-4 py-3">
@@ -440,8 +482,8 @@ function Content() {
               ) : postsInFeed.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#d1d5db] bg-white px-4 py-10 text-center">
                   <Megaphone size={19} className="mx-auto text-[#9ca3af]" />
-                  <p className="mt-3 text-xs font-medium text-[#374151]">{feedMode === "MINE" ? "No published posts yet" : "No community posts yet"}</p>
-                  <p className="mt-1 text-[10px] leading-4 text-[#6b7280]">{feedMode === "MINE" ? "Your posts appear here after Admin Web approves them." : "Approved business posts will appear here."}</p>
+                  <p className="mt-3 text-xs font-medium text-[#374151]">{feedMode === "MINE" ? (myPostsMode === "ARCHIVE" ? "No archived posts yet" : "No running posts yet") : "No community posts yet"}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-[#6b7280]">{feedMode === "MINE" ? (myPostsMode === "ARCHIVE" ? "Archived and expired posts appear here." : "Approved posts appear here during their scheduled dates.") : "Running posts from businesses and BuzzTap Admin appear here."}</p>
                 </div>
               ) : postsInFeed.map((item) => (
                 <article key={item.id || item.contentId} className="overflow-hidden rounded-xl border border-[#d1d5db] bg-white text-[#111827] shadow-[0_1px_3px_rgba(0,0,0,0.12)]">
@@ -456,7 +498,7 @@ function Content() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-semibold text-[#111827]">{feedMode === "MINE" ? business?.name || "Your business" : item.businessName || (item.business_id === business?.id ? business?.name : "") || "BuzzTap Community"}</p>
-                      <p className="text-[10px] text-[#6b7280]">{formatDate(item.created_at?.slice(0, 10) || item.startDate)} | {statusLabel(item.status || item.viewStatus || contentStatus(item))}</p>
+                      <p className="text-[10px] text-[#6b7280]">{formatDate(item.created_at?.slice(0, 10) || item.startDate)} | {statusLabel(item.viewStatus || contentStatus(item))}</p>
                     </div>
                     <div className="relative">
                       <button
@@ -488,7 +530,7 @@ function Content() {
               ))}
             </div>
           </div>
-          <p className="mt-3 text-center text-[10px] leading-4 text-[#666]">Only posts published by Admin Web appear in this feed.</p>
+          <p className="mt-3 text-center text-[10px] leading-4 text-[#666]">{feedMode === "MINE" && myPostsMode === "ARCHIVE" ? "Your archived and expired posts are kept here for reference." : "Only posts published by Admin Web appear in this feed."}</p>
         </section>
 
         <section ref={formPanel} className={`${cardClass} scroll-mt-6 p-4 sm:p-5`} aria-label="Create BuzzTap post">

@@ -18,7 +18,7 @@ function Workstations() {
   const [notice, setNotice] = useState("")
   const [busyId, setBusyId] = useState(null)
   const visible = workstations.filter((item) =>
-    `${item.id} ${item.name} ${item.status}`.toLowerCase().includes(query.toLowerCase()),
+    `${item.workstation_code || item.id} ${item.name} ${item.status}`.toLowerCase().includes(query.toLowerCase()),
   )
 
   const add = async (event) => {
@@ -64,7 +64,7 @@ function Workstations() {
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F5C400]/10 text-[#F5C400]"><Monitor size={21} /></div>
                 <Status>{item.status}</Status>
               </div>
-              <p className="mt-6 text-xs text-[#666]">{item.id} · {item.type}</p>
+              <p className="mt-6 text-xs text-[#666]">{item.workstation_code || item.id} · {item.type}</p>
               <h2 className="mt-2 text-xl font-semibold text-white">{item.name}</h2>
               <p className="mt-2 text-sm text-[#777]">{item.location} · {item.device}</p>
               <p className="mt-4 font-semibold text-[#F5C400]">{item.rate} BP/hour</p>
