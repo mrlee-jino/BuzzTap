@@ -86,7 +86,7 @@ function Dashboard() {
     },
     {
       label: "Available Customized Buzz Points",
-      value: `${(wallet.purchased - wallet.distributed).toLocaleString()} BP`,
+      value: `${wallet.balance.toLocaleString()} BP`,
       description: "Purchased less distributed",
     },
   ]

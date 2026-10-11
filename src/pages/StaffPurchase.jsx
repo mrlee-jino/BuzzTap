@@ -1,16 +1,22 @@
 import { useState } from "react"
 import { Package, Plus, Minus } from "lucide-react"
 import { useBusiness } from "../businessContext"
-import { Button, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
+import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 export default function StaffPurchase() {
-  const { products, inventoryMovements, issueInventory, dataLoading, dataError } = useBusiness()
+  const { products, customers, inventoryMovements, checkoutProduct, dataLoading, dataError } = useBusiness()
   const [selected, setSelected] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [notice, setNotice] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [checkout, setCheckout] = useState(null)
+  const [customerType, setCustomerType] = useState("ACCOUNT")
+  const [paymentMethod, setPaymentMethod] = useState("CASH")
+  const [checkoutError, setCheckoutError] = useState("")
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
+  const changeRequest = () => setRequestId(crypto.randomUUID())
 
-  const activeProducts = products.filter((item) => item.status === "ACTIVE")
+  const activeProducts = products.filter((item) => item.status === "ACTIVE" && (item.item_type || "PRODUCT") === "PRODUCT")
   const selectedProduct = activeProducts.find((item) => item.id === selected) || activeProducts[0]
 
   const submit = async (event) => {
@@ -23,17 +29,36 @@ export default function StaffPurchase() {
       setNotice("Enter a whole-number quantity that does not exceed available stock.")
       return
     }
+    setCheckout({ ...selectedProduct, quantity })
+    setCustomerType("ACCOUNT")
+    setPaymentMethod("CASH")
+    setCheckoutError("")
+    changeRequest()
+  }
+
+  const pay = async (event) => {
+    event.preventDefault()
+    if (submitting) return
+    const form = new FormData(event.currentTarget)
     setSubmitting(true)
-    setNotice("")
-    const result = await issueInventory(selectedProduct.id, quantity, "Staff inventory issue")
-    setSubmitting(false)
-    setNotice(result.success ? `${quantity} × ${selectedProduct.name} issued and recorded.` : result.error)
-    if (result.success) setQuantity(1)
+    setCheckoutError("")
+    try {
+      const result = await checkoutProduct({ productId: checkout.id, quantity: checkout.quantity,
+        customerId: customerType === "ACCOUNT" ? form.get("customerId") : null,
+        guestName: customerType === "LOCAL" ? form.get("guestName").trim() : null,
+        paymentMethod, cashAmount: paymentMethod === "CASH" ? Number(form.get("cashAmount")) : null, requestId })
+      if (result.success) {
+        setNotice(`${checkout.quantity} × ${checkout.name} purchased by ${paymentMethod === "CASH" ? "cash" : "BuzzPoints"}.`)
+        setCheckout(null)
+        setQuantity(1)
+      } else setCheckoutError(result.error)
+    } catch { setCheckoutError("Purchase could not be confirmed. Retry with the same details.") }
+    finally { setSubmitting(false) }
   }
 
   return (
     <div className="mx-auto max-w-[1200px]">
-      <PageHeader eyebrow="STAFF ACCESS" title="Product Purchase" description="Issue stock items for business operations and staff use." />
+      <PageHeader eyebrow="STAFF ACCESS" title="Product Purchase" description="Sell products to BuzzTap account customers or local customers." />
       {(notice || dataError || dataLoading) && (
         <p role={dataError ? "alert" : "status"} className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>
           {dataError ? `Database error: ${dataError}` : notice || "Loading inventory…"}
@@ -68,7 +93,7 @@ export default function StaffPurchase() {
         </section>
 
         <section className={cardClass}>
-          <h2 className="mb-5 text-xl font-semibold text-white">Issue inventory</h2>
+          <h2 className="mb-5 text-xl font-semibold text-white">Purchase details</h2>
           {selectedProduct && (
             <form onSubmit={submit} className="space-y-5">
               <div>
@@ -84,13 +109,23 @@ export default function StaffPurchase() {
                   <button type="button" aria-label="Increase quantity" disabled={quantity >= selectedProduct.stock} onClick={() => setQuantity((current) => Math.min(selectedProduct.stock, current + 1))} className="rounded-xl border border-[#333] p-2 text-white disabled:opacity-50"><Plus size={16} /></button>
                 </div>
               </div>
-              <p className="rounded-2xl border border-[#242424] bg-[#181818] p-4 text-sm text-[#AAA]">The stock adjustment and its audit record are saved together. Catalog price is not used for stock issuance.</p>
-              <Button type="submit" disabled={submitting || !selectedProduct.stock}><Plus size={17} />{submitting ? "Recording…" : "Confirm issue"}</Button>
+              <p className="rounded-2xl border border-[#242424] bg-[#181818] p-4 text-sm text-[#AAA]">BuzzPoints total: {selectedProduct.price * quantity} BP. Choose the customer and payment method at checkout.</p>
+              <Button type="submit" disabled={submitting || !selectedProduct.stock}><Plus size={17} />Continue to checkout</Button>
             </form>
           )}
         </section>
       </div>
 
+      {checkout && <Modal title={`Purchase · ${checkout.name}`} onClose={() => { if (!submitting) setCheckout(null) }}><form onSubmit={pay} className="space-y-4" onChange={changeRequest}>
+        <p className="text-sm text-[#AAA]">{checkout.quantity} units · {checkout.price * checkout.quantity} BP</p>
+        <Field label="Customer type"><select className={inputClass} value={customerType} disabled={submitting} onChange={(event) => { setCustomerType(event.target.value); setPaymentMethod("CASH") }}><option value="ACCOUNT">BuzzTap account customer</option><option value="LOCAL">Local customer (no BuzzTap account)</option></select></Field>
+        {customerType === "ACCOUNT" ? <Field label="Customer account"><select className={inputClass} name="customerId" required defaultValue="" disabled={submitting}><option value="" disabled>Select customer</option>{customers.filter((item) => item.status === "ACTIVE" && item.profileStatus === "ACTIVE" && item.profile_id).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.email} · {item.wallet ?? 0} BP</option>)}</select><p className="mt-2 text-xs text-[#AAA]">Register the account on the Customers page if it is not listed.</p></Field> : <Field label="Customer name"><input className={inputClass} name="guestName" required maxLength={160} disabled={submitting} placeholder="Local customer name" /></Field>}
+        <Field label="Payment method"><select className={inputClass} value={paymentMethod} disabled={submitting} onChange={(event) => setPaymentMethod(event.target.value)}><option value="CASH">Cash</option>{customerType === "ACCOUNT" && <option value="BUZZPOINTS">BuzzPoints</option>}</select></Field>
+        {paymentMethod === "CASH" ? <Field label="Total cash sale amount"><input className={inputClass} name="cashAmount" type="number" min="0.01" step="0.01" required disabled={submitting} placeholder="Enter total cash amount" /><p className="mt-2 text-xs text-[#AAA]">Enter the cash price for all selected units. The catalog price is in BP.</p></Field> : <p className="text-sm text-[#AAA]">{checkout.price * checkout.quantity} BP will be deducted from the customer's shared wallet.</p>}
+        {customerType === "LOCAL" && <p className="text-xs text-[#AAA]">Local customers can pay with cash only.</p>}
+        {checkoutError && <p role="alert" className="text-sm text-red-300">{checkoutError}</p>}
+        <div className="flex gap-3"><Button secondary disabled={submitting} onClick={() => setCheckout(null)}>Cancel</Button><Button type="submit" disabled={submitting}>{submitting ? "Processing…" : "Confirm Purchase"}</Button></div>
+      </form></Modal>}
       <section className={`${cardClass} mt-6`}>
         <h2 className="text-lg font-semibold text-white">Recent stock movements</h2>
         {inventoryMovements.length ? (

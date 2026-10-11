@@ -4,7 +4,7 @@ import { supabase } from "./lib/supabaseClient"
 import { BusinessContext } from "./businessContext"
 import { useAuth } from "./context/useAuth"
 
-const emptyWallet = { purchased: 0, distributed: 0, collected: 0, pendingSettlement: 0, settled: 0 }
+const emptyWallet = { purchased: 0, distributed: 0, collected: 0, pendingSettlement: 0, settled: 0, balance: 0 }
 const defaultNotifications = {
   transactionAlerts: true,
   settlementUpdates: true,
@@ -84,7 +84,7 @@ export function BusinessProvider({ children, selectedMembership }) {
         supabase.from("customers").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("products_services").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("workstations").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
-        supabase.from("nfc_cards").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
+        supabase.rpc("get_registered_customer_cards", { p_business_id: bid }),
         supabase.from("wallet_ledger").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("business_transactions").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("business_invitations").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
@@ -96,6 +96,9 @@ export function BusinessProvider({ children, selectedMembership }) {
         supabase.from("workstation_sessions").select("*").eq("business_id", bid).order("started_at", { ascending: false }),
         supabase.from("product_inventory_movements").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("business_preferences").select("notifications").eq("business_id", bid).maybeSingle(),
+        ["OWNER", "MANAGER", "CASHIER"].includes(businessRole)
+          ? supabase.rpc("get_business_shared_bp", { p_business_id: bid })
+          : Promise.resolve({ data: { customers: [], business_balance: null }, error: null }),
       ])
       const failure = queries.find((result) => result.error)
       if (failure) {
@@ -106,21 +109,17 @@ export function BusinessProvider({ children, selectedMembership }) {
         customerResult, productResult, workstationResult, cardResult,
         ledgerResult, transactionResult, invitationResult, accessLogResult,
         profileResult, purchaseResult, settlementResult, contentResult,
-        sessionResult, movementResult, preferencesResult,
+        sessionResult, movementResult, preferencesResult, sharedWalletResult,
       ] = queries
       const ledger = ledgerResult.data || []
       const completedLedger = ledger.filter((item) => String(item.status || "").toUpperCase() === "COMPLETED")
-      const customerBalances = completedLedger.reduce((result, item) => {
-        if (!item.customer_id) return result
-        const amount = money(item.amount)
-        const multiplier = item.type === "CUSTOMER_PURCHASE" ? -1 : 1
-        result[item.customer_id] = (result[item.customer_id] || 0) + multiplier * amount
-        return result
-      }, {})
+      const customerBalances = Object.fromEntries((sharedWalletResult.data?.customers || [])
+        .map((item) => [item.id, { balance: item.balance == null ? null : money(item.balance), profileStatus: item.profile_status }]))
       const customers = (customerResult.data || []).map((item) => ({
         ...item,
-        wallet: customerBalances[item.id] ?? money(item.wallet_balance),
-        card: (cardResult.data || []).find((card) => card.customer_id === item.id && card.status === "ACTIVE")?.id || null,
+        wallet: customerBalances[item.id]?.balance ?? null,
+        profileStatus: customerBalances[item.id]?.profileStatus,
+        card: (cardResult.data || []).find((card) => card.customer_id === item.id && card.status === "ACTIVE")?.card_code || null,
       }))
       const walletTotals = completedLedger.reduce((result, item) => {
         const amount = money(item.amount)
@@ -134,6 +133,13 @@ export function BusinessProvider({ children, selectedMembership }) {
         .reduce((sum, item) => sum + money(item.amount), 0)
       walletTotals.pendingSettlement = (settlementResult.data || []).filter((item) => item.status === "PENDING").reduce((sum, item) => sum + money(item.amount), 0)
       walletTotals.settled = (settlementResult.data || []).filter((item) => item.status === "APPROVED" || item.status === "SETTLED").reduce((sum, item) => sum + money(item.amount), 0)
+      walletTotals.balance = money(sharedWalletResult.data?.business_balance)
+      for (const item of transactionResult.data || []) {
+        if (!item.metadata?.shared_transfer_id || item.status !== "COMPLETED") continue
+        if (item.type === "CUSTOMER_LOAD") walletTotals.distributed += money(item.amount)
+        if (item.type === "CUSTOMER_PURCHASE") walletTotals.collected += money(item.amount)
+        if (item.type === "REFUND") walletTotals.collected -= money(item.amount)
+      }
       const customerName = (id) => customers.find((item) => item.id === id)?.name || "Unknown customer"
       const profileById = (profileResult.data || []).reduce((result, item) => {
         result[item.id] = item
@@ -151,7 +157,7 @@ export function BusinessProvider({ children, selectedMembership }) {
         })),
         ledger,
         cards: (cardResult.data || []).map((item) => ({ ...item, customer: item.customer_id ? customerName(item.customer_id) : "-" })),
-        transactions: (transactionResult.data || []).map((item) => ({ ...item, customer: customerName(item.customer_id), card: item.card_id || "-", workstation: item.workstation_id || "-", operatorName: profileById[item.created_by]?.full_name || profileById[item.created_by]?.email || "Unknown member", date: displayDate(item.created_at), amount: money(item.amount) })),
+        transactions: (transactionResult.data || []).map((item) => ({ ...item, customer: item.customer_id ? customerName(item.customer_id) : item.metadata?.guest_name || "Local customer", card: item.card_id || "-", workstation: item.workstation_id || "-", operatorName: profileById[item.created_by]?.full_name || profileById[item.created_by]?.email || "Unknown member", date: displayDate(item.created_at), amount: money(item.amount) })),
         staff: (invitationResult.data || []).map((item) => ({ ...item, name: item.name || item.email, email: item.email, invitation_status: item.status })),
         accessLogs: (accessLogResult.data || []).map((item) => ({ ...item, userEmail: profileById[item.user_id]?.email || "Unknown member", date: displayDate(item.occurred_at) })),
         purchaseRequests: (purchaseResult.data || []).map((item) => ({ ...item, amount: money(item.amount) })),
@@ -174,11 +180,13 @@ export function BusinessProvider({ children, selectedMembership }) {
     } finally {
       setDataLoading(false)
     }
-  }, [business])
+  }, [business, businessRole])
 
   useEffect(() => {
     const refresh = setTimeout(() => loadData(), 0)
-    return () => clearTimeout(refresh)
+    const onFocus = () => loadData()
+    window.addEventListener("focus", onFocus)
+    return () => { clearTimeout(refresh); window.removeEventListener("focus", onFocus) }
   }, [loadData])
 
   const mutate = useCallback(async (table, payload, options = {}) => {
@@ -210,7 +218,8 @@ export function BusinessProvider({ children, selectedMembership }) {
   const update = (table, id, values) => mutate(table, values, { update: true, id })
   const addCustomer = (values) => mutate("customers", { id: values.id?.trim() || idFor("CUS"), name: values.name, email: values.email })
   const updateCustomerStatus = (id, status) => update("customers", id, { status })
-  const addProduct = (values) => mutate("products_services", { id: values.id, name: values.name, description: values.description, category: values.category, price: values.price, stock: values.stock })
+  const addProduct = (values) => mutate("products_services", { id: values.id, name: values.name, description: values.description, category: values.category, price: values.price, item_type: values.item_type, stock: values.item_type === "PRODUCT" ? values.stock : 0 })
+  const updateProductType = (id, item_type) => update("products_services", id, { item_type })
   const updateProductStatus = (id, status) => update("products_services", id, { status })
   const addWorkstation = ({ id, ...values }) => mutate("workstations", {
     ...values,
@@ -240,12 +249,13 @@ export function BusinessProvider({ children, selectedMembership }) {
     if (!oldCard?.customer_id) return false
     return (await assignCard(oldCard.customer_id, newId, oldId)).success
   }
-  const loadPoints = async (customerId, amount) => {
+  const loadPoints = async (customerId, amount, requestId) => {
     if (!business?.id) return false
-    const { error } = await supabase.rpc("load_customer_points", {
+    const { error } = await supabase.rpc("load_shared_customer_bp", {
       p_business_id: business.id,
       p_customer_id: customerId,
       p_amount: amount,
+      p_request_id: requestId,
     })
     if (error) {
       setDataError(error.message)
@@ -254,10 +264,31 @@ export function BusinessProvider({ children, selectedMembership }) {
     await loadData()
     return true
   }
-  const purchase = (values) => mutate("business_transactions", { ...values, type: values.type || "CUSTOMER_PURCHASE", status: "COMPLETED" })
+  const purchase = async ({ customerId, productId, quantity, requestId }) => {
+    if (!business?.id) return { success: false, error: "No active business is available." }
+    const { data, error } = await supabase.rpc("purchase_shared_product", {
+      p_business_id: business.id, p_customer_id: customerId, p_product_id: productId,
+      p_quantity: quantity, p_request_id: requestId,
+    })
+    if (error) return { success: false, error: error.message }
+    await loadData()
+    return { success: true, id: data }
+  }
+  const checkoutProduct = async (details) => {
+    if (!business?.id) return { success: false, error: "No active business is available." }
+    const { data: id, error } = await supabase.rpc("checkout_product_purchase", {
+      p_business_id: business.id, p_product_id: details.productId, p_quantity: details.quantity,
+      p_customer_id: details.customerId || null, p_guest_name: details.guestName || null,
+      p_payment_method: details.paymentMethod, p_cash_amount: details.cashAmount ?? null,
+      p_request_id: details.requestId,
+    })
+    if (error) return { success: false, error: error.message }
+    await loadData()
+    return { success: true, id }
+  }
   const refund = async (item) => {
     if (!business?.id) return { success: false, error: "No active business is available." }
-    const { data: refundId, error } = await supabase.rpc("record_business_refund", {
+    const { data: refundId, error } = await supabase.rpc("refund_shared_customer_bp", {
       p_business_id: business.id,
       p_transaction_id: item.id,
     })
@@ -387,11 +418,13 @@ export function BusinessProvider({ children, selectedMembership }) {
     await loadData()
     return { success: true }
   }
-  const changeWorkstationSession = async (workstationId, action) => {
+  const changeWorkstationSession = async (workstationId, action, details = {}) => {
     if (!business?.id) return { success: false, error: "No active business is available." }
     const { error } = await supabase.rpc(
-      action === "START" ? "start_workstation_session" : "end_workstation_session",
-      { p_business_id: business.id, p_workstation_id: workstationId },
+      action === "START" ? "start_timed_workstation_session" : "end_workstation_session",
+      { p_business_id: business.id, p_workstation_id: workstationId,
+        ...(action === "START" ? { p_customer_id: details.customerId || null, p_guest_name: details.guestName || null, p_payment_method: details.paymentMethod, p_amount: details.amount, p_request_id: details.requestId, p_duration_minutes: details.durationMinutes ?? null } : {}),
+      },
     )
     if (error) {
       setDataError(error.message)
@@ -436,8 +469,8 @@ export function BusinessProvider({ children, selectedMembership }) {
     <BusinessContext.Provider value={{
       user, profile, memberships, activeMemberships, currentMembership, business, businessRole,
       isAuthenticated, authLoading, authError, dataLoading, dataError, refreshBusinessData: loadData,
-      ...data, wallet, authenticateStaff, loadPoints, purchase, refund, addActivity, addCustomer,
-      updateCustomerStatus, addCard, assignCard, replaceCard, updateCardStatus, addProduct, updateProductStatus,
+      ...data, wallet, authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
+      updateCustomerStatus, addCard, assignCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, updateProductType,
       addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, deleteStaff, purchaseInventory,
       requestPurchase, requestSettlement, saveBusinessSettings, changeWorkstationSession,
       issueInventory, restockInventory,

@@ -19,15 +19,15 @@ function Transactions() {
 
   const doRefund = async (item) => {
     const confirmed = window.confirm(
-      `Record a linked refund audit entry for ${item.amount} BP to ${item.customer}? This does not initiate an external payment or change the customer wallet balance.`,
+      `Return ${item.amount} BP from your business wallet to ${item.customer}'s shared wallet?`,
     )
     if (!confirmed) return
     setRefundingId(item.id)
     setNotice("")
     const result = await refund(item)
     setNotice(result.success
-      ? `Refund audit entry ${result.id} was created for ${item.customer}.`
-      : result.error || "Refund audit entry could not be created.")
+      ? `Shared BP payment refunded to ${item.customer}.`
+      : result.error || "Refund could not be completed.")
     setRefundingId(null)
   }
 
@@ -47,7 +47,7 @@ function Transactions() {
 
   return (
     <div className="mx-auto max-w-[1600px]">
-      <PageHeader eyebrow="LEDGER" title="Transactions" description="Business-scoped purchases, wallet loads, and linked refund audit entries." action={<Button secondary onClick={exportCsv}><Receipt size={17} />Export CSV</Button>} />
+      <PageHeader eyebrow="LEDGER" title="Transactions" description="Business purchases, shared wallet loads, and BP refunds." action={<Button secondary onClick={exportCsv}><Receipt size={17} />Export CSV</Button>} />
       {(notice || dataError || dataLoading) && (
         <p role={dataError ? "alert" : "status"} className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>
           {dataError ? `Database error: ${dataError}` : notice || "Loading transactions…"}
@@ -74,15 +74,15 @@ function Transactions() {
                   <td className="px-5 py-4 font-medium text-white">{item.id}</td>
                   <td className="px-5 py-4"><p className="text-sm text-white">{item.customer}</p><p className="text-xs text-[#666]">{item.card} · {item.workstation}</p></td>
                   <td className="px-5 py-4 text-xs text-[#AAA]">{item.type}</td>
-                  <td className="px-5 py-4 font-semibold text-white">{item.amount.toLocaleString()} BP</td>
+                  <td className="px-5 py-4 font-semibold text-white">{item.amount.toLocaleString()} {item.type === "CASH_PURCHASE" || item.metadata?.payment_method === "CASH" ? "cash" : "BP"}</td>
                   <td className="px-5 py-4"><Status>{item.status}</Status></td>
                   <td className="px-5 py-4 text-sm text-white">{item.operatorName}</td>
                   <td className="px-5 py-4 text-xs text-[#777]">{item.date}</td>
                   <td className="px-5 py-4">
                     <div className="flex gap-1">
                       <button title="View details" onClick={() => setSelectedTransaction(item)} className="rounded-lg p-2 text-[#666] hover:bg-[#222] hover:text-white"><Eye size={16} /></button>
-                      {item.type === "CUSTOMER_PURCHASE" && item.status === "COMPLETED" && (
-                        <button title="Record linked refund" disabled={refundingId === item.id} onClick={() => doRefund(item)} className="rounded-lg p-2 text-[#666] hover:bg-[#F5C400] hover:text-black disabled:opacity-50"><RotateCcw size={16} /></button>
+                      {item.type === "CUSTOMER_PURCHASE" && item.status === "COMPLETED" && item.metadata?.shared_transfer_id && (
+                        <button title="Refund shared BP payment" disabled={refundingId === item.id} onClick={() => doRefund(item)} className="rounded-lg p-2 text-[#666] hover:bg-[#F5C400] hover:text-black disabled:opacity-50"><RotateCcw size={16} /></button>
                       )}
                     </div>
                   </td>
