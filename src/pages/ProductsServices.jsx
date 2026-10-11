@@ -1,10 +1,10 @@
 import { useState } from "react"
-import { Package, Plus, Search, ToggleLeft } from "lucide-react"
+import { Package, Plus, Search, ToggleLeft, Trash2 } from "lucide-react"
 import { useBusiness } from "../businessContext"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 function ProductsServices() {
-  const { products, customers, purchase, addProduct, updateProductStatus, updateProductType, restockInventory, dataLoading, dataError } = useBusiness()
+  const { products, customers, purchase, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
   const [query, setQuery] = useState("")
   const [modal, setModal] = useState(false)
   const [itemType, setItemType] = useState("PRODUCT")
@@ -14,6 +14,20 @@ function ProductsServices() {
   const [paying, setPaying] = useState(false)
   const [paymentError, setPaymentError] = useState("")
   const [purchaseRequestId, setPurchaseRequestId] = useState(() => crypto.randomUUID())
+  const [deleteItem, setDeleteItem] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState("")
+  const confirmDelete = async () => {
+    if (deleting) return
+    setDeleting(true)
+    setDeleteError("")
+    try {
+      const result = await deleteProduct(deleteItem.id)
+      if (result.success) { setNotice(`${deleteItem.name} deleted from the catalog.`); setDeleteItem(null) }
+      else setDeleteError(result.error)
+    } catch { setDeleteError("Item could not be deleted. Please try again.") }
+    finally { setDeleting(false) }
+  }
   const pay = async (event) => {
     event.preventDefault()
     if (paying) return
@@ -82,11 +96,17 @@ function ProductsServices() {
                   const ok = await updateProductStatus(product.id, product.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")
                   setNotice(ok ? `${product.name} availability updated.` : "Product status update failed.")
                 }} className="rounded-lg p-2 text-[#777] hover:bg-[#222] hover:text-white"><ToggleLeft size={20} /></button>
+                {["OWNER", "MANAGER"].includes(businessRole) && <button type="button" title="Delete item" aria-label={`Delete ${product.name}`} onClick={() => { setDeleteItem(product); setDeleteError("") }} className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"><Trash2 size={18} /></button>}
               </div>
             </div>
           </div>
         )) : <div className={`${cardClass} text-center text-sm text-[#666]`}>{dataLoading ? "Loading products…" : "No products found."}</div>}
       </div>
+      {deleteItem && <Modal title="Delete Catalog Item" onClose={() => { if (!deleting) setDeleteItem(null) }}>
+        <p className="text-sm text-[#AAA]">Delete <strong className="text-white">{deleteItem.name}</strong> from your catalog? It will no longer be available for purchase. Past transactions and stock records will be preserved.</p>
+        {deleteError && <p role="alert" className="mt-4 text-sm text-red-300">{deleteError}</p>}
+        <div className="mt-6 flex justify-end gap-3"><Button secondary disabled={deleting} onClick={() => setDeleteItem(null)}>Cancel</Button><Button disabled={deleting} onClick={confirmDelete}>{deleting ? "Deleting…" : "Confirm Delete"}</Button></div>
+      </Modal>}
       {modal && <Modal title="Add Catalog Item" onClose={() => setModal(false)}><form onSubmit={add} className="space-y-4">
         <Field label="Item type"><select className={inputClass} value={itemType} onChange={(event) => setItemType(event.target.value)}><option value="PRODUCT">Product</option><option value="SERVICE">Service</option><option value="WORKSTATION">From Workstation</option></select></Field>
         <Field label="Product ID"><input className={inputClass} name="id" required placeholder="PROD-004" /></Field>

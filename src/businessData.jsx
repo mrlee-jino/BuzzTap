@@ -147,7 +147,7 @@ export function BusinessProvider({ children, selectedMembership }) {
       }, {})
       setData({
         customers,
-        products: (productResult.data || []).map((item) => ({ ...item, price: money(item.price), stock: Number(item.stock || 0) })),
+        products: (productResult.data || []).filter((item) => !item.deleted_at).map((item) => ({ ...item, price: money(item.price), stock: Number(item.stock || 0) })),
         workstations: (workstationResult.data || []).map((item) => ({ ...item, rate: money(item.rate) })),
         workstationSessions: sessionResult.data || [],
         inventoryMovements: (movementResult.data || []).map((item) => ({
@@ -221,6 +221,13 @@ export function BusinessProvider({ children, selectedMembership }) {
   const addProduct = (values) => mutate("products_services", { id: values.id, name: values.name, description: values.description, category: values.category, price: values.price, item_type: values.item_type, stock: values.item_type === "PRODUCT" ? values.stock : 0 })
   const updateProductType = (id, item_type) => update("products_services", id, { item_type })
   const updateProductStatus = (id, status) => update("products_services", id, { status })
+  const deleteProduct = async (id) => {
+    if (!business?.id) return { success: false, error: "No active business is available." }
+    const { error } = await supabase.rpc("delete_catalog_item", { p_business_id: business.id, p_product_id: id })
+    if (error) return { success: false, error: error.message }
+    await loadData()
+    return { success: true }
+  }
   const addWorkstation = ({ id, ...values }) => mutate("workstations", {
     ...values,
     id: crypto.randomUUID(),
@@ -470,7 +477,7 @@ export function BusinessProvider({ children, selectedMembership }) {
       user, profile, memberships, activeMemberships, currentMembership, business, businessRole,
       isAuthenticated, authLoading, authError, dataLoading, dataError, refreshBusinessData: loadData,
       ...data, wallet, authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
-      updateCustomerStatus, addCard, assignCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, updateProductType,
+      updateCustomerStatus, addCard, assignCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, updateProductType, deleteProduct,
       addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, deleteStaff, purchaseInventory,
       requestPurchase, requestSettlement, saveBusinessSettings, changeWorkstationSession,
       issueInventory, restockInventory,
