@@ -292,8 +292,9 @@ export function BusinessProvider({ children, selectedMembership }) {
       p_request_id: details.requestId,
     })
     if (error) return { success: false, error: error.message }
+    const { data: receipt } = await supabase.from("business_transactions").select("amount,metadata").eq("business_id", business.id).eq("id", id).maybeSingle()
     await loadData()
-    return { success: true, id }
+    return { success: true, id, receipt }
   }
   const refund = async (item) => {
     if (!business?.id) return { success: false, error: "No active business is available." }

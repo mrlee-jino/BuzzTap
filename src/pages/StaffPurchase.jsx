@@ -15,6 +15,7 @@ export default function StaffPurchase() {
   const [customerType, setCustomerType] = useState("ACCOUNT")
   const [paymentMethod, setPaymentMethod] = useState("CASH")
   const [checkoutError, setCheckoutError] = useState("")
+  const [cashReceived, setCashReceived] = useState("")
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
   const changeRequest = () => setRequestId(crypto.randomUUID())
 
@@ -31,6 +32,7 @@ export default function StaffPurchase() {
       setNotice("Enter a whole-number quantity that does not exceed available stock.")
       return
     }
+    setCashReceived("")
     setCheckout({ ...selectedProduct, quantity })
     setCustomerType("ACCOUNT")
     setPaymentMethod("CASH")
@@ -50,7 +52,7 @@ export default function StaffPurchase() {
         guestName: customerType === "LOCAL" ? form.get("guestName").trim() : null,
         paymentMethod, cashAmount: paymentMethod === "CASH" ? Number(form.get("cashAmount")) : null, requestId })
       if (result.success) {
-        setNotice(`${checkout.quantity} × ${checkout.name} purchased by ${paymentMethod === "CASH" ? "cash" : "BuzzPoints"}.`)
+        setNotice(paymentMethod === "CASH" && result.receipt ? `Sale: ${result.receipt.amount} cash. Received: ${result.receipt.metadata.cash_received} cash. Change: ${result.receipt.metadata.change_due} cash.` : `${checkout.quantity} × ${checkout.name} purchased by ${paymentMethod === "CASH" ? "cash" : "BuzzPoints"}.`)
         setCheckout(null)
         setQuantity(1)
       } else setCheckoutError(result.error)
@@ -124,7 +126,7 @@ export default function StaffPurchase() {
         <Field label="Payment method"><select className={inputClass} value={paymentMethod} disabled={submitting} onChange={(event) => setPaymentMethod(event.target.value)}><option value="CASH">Cash</option>{customerType === "ACCOUNT" && <option value="BUZZPOINTS">BuzzPoints</option>}</select></Field>
         <Field label="Customer type"><select className={inputClass} value={customerType} disabled={submitting} onChange={(event) => { setCustomerType(event.target.value); setPaymentMethod("CASH") }}><option value="ACCOUNT">BuzzTap account customer</option><option value="LOCAL">Local customer (no BuzzTap account)</option></select></Field>
         {customerType === "ACCOUNT" ? <PaymentCustomer key={paymentMethod} allowTap={paymentMethod === "BUZZPOINTS"} disabled={submitting} onChange={changeRequest} /> : <Field label="Customer name"><input className={inputClass} name="guestName" required maxLength={160} disabled={submitting} placeholder="Local customer name" /></Field>}
-        {paymentMethod === "CASH" ? <Field label="Total cash sale amount"><input className={inputClass} name="cashAmount" type="number" min="0.01" step="0.01" required disabled={submitting} placeholder="Enter total cash amount" /><p className="mt-2 text-xs text-[#AAA]">Enter the cash price for all selected units. The catalog price is in BP.</p></Field> : <p className="text-sm text-[#AAA]">{checkout.price * checkout.quantity} BP will be deducted from the customer's shared wallet.</p>}
+        {paymentMethod === "CASH" ? <div className="space-y-3"><p className="text-sm font-semibold text-[#F5C400]">Total due: {(checkout.price * checkout.quantity).toLocaleString()} cash</p><Field label="Cash received"><input className={inputClass} name="cashAmount" type="number" min={Math.max(0.01, checkout.price * checkout.quantity)} step="0.01" required disabled={submitting} value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder="Amount handed by customer" /></Field><p className="text-sm text-[#AAA]">Change due: {Math.max(0, Math.round((Number(cashReceived || 0) - checkout.price * checkout.quantity) * 100) / 100).toLocaleString()} cash</p></div> : <p className="text-sm text-[#AAA]">{checkout.price * checkout.quantity} BP will be deducted from the customer's shared wallet.</p>}
         {customerType === "LOCAL" && <p className="text-xs text-[#AAA]">Local customers can pay with cash only.</p>}
         {checkoutError && <p role="alert" className="text-sm text-red-300">{checkoutError}</p>}
         <div className="flex gap-3"><Button secondary disabled={submitting} onClick={() => setCheckout(null)}>Cancel</Button><Button type="submit" disabled={submitting}>{submitting ? "Processing…" : "Confirm Purchase"}</Button></div>
