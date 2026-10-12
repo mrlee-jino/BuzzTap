@@ -26,6 +26,16 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       icon: LayoutDashboard,
     },
     {
+      name: "Staff Purchase",
+      path: "/staff-purchase",
+      icon: ShoppingCart,
+    },
+    {
+      name: "Products & Services",
+      path: "/products-services",
+      icon: Package,
+    },
+    {
       name: "Workstations",
       path: "/workstations",
       icon: Monitor,
@@ -36,14 +46,14 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       icon: Receipt,
     },
     {
+      name: "Content",
+      path: "/content",
+      icon: Megaphone,
+    },
+    {
       name: "Customers",
       path: "/customers",
       icon: Users,
-    },
-    {
-      name: "Products & Services",
-      path: "/products-services",
-      icon: Package,
     },
     {
       name: "Reports",
@@ -54,16 +64,6 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       name: "Customized Buzz Points Wallet",
       path: "/wallet",
       icon: WalletCards,
-    },
-    {
-      name: "Content",
-      path: "/content",
-      icon: Megaphone,
-    },
-    {
-      name: "Staff Purchase",
-      path: "/staff-purchase",
-      icon: ShoppingCart,
     },
     {
       name: "Settings",
