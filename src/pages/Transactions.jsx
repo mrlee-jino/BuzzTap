@@ -2,6 +2,8 @@ import { useState } from "react"
 import { Eye, Receipt, RotateCcw, Search } from "lucide-react"
 import { useBusiness } from "../businessContext"
 import { Button, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
+import FinanceSummary from "../components/FinanceSummary"
+import { paymentMethod, formatAmount, isRefund, summarizeFinance } from "../lib/businessFinance"
 
 const statuses = ["ALL", "COMPLETED", "PENDING", "FAILED", "REFUNDED"]
 
@@ -9,11 +11,13 @@ function Transactions() {
   const { transactions, refund, dataLoading, dataError } = useBusiness()
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("ALL")
+  const [method, setMethod] = useState("ALL")
   const [notice, setNotice] = useState("")
   const [selectedTransaction, setSelectedTransaction] = useState(null)
   const [refundingId, setRefundingId] = useState(null)
   const visible = transactions.filter((item) =>
-    (filter === "ALL" || (filter === "REFUNDED" ? item.type === "REFUND" || item.status === "REFUNDED" : item.status === filter))
+    (filter === "ALL" || (filter === "REFUNDED" ? isRefund(item) || item.status === "REFUNDED" : item.status === filter))
+    && (method === "ALL" || paymentMethod(item, transactions) === method)
     && `${item.id} ${item.customer} ${item.card} ${item.operatorName}`.toLowerCase().includes(query.toLowerCase()),
   )
 
@@ -33,8 +37,8 @@ function Transactions() {
 
   const exportCsv = () => {
     const rows = [
-      ["Transaction ID", "Customer", "NFC Card", "Type", "Amount (stored unit)", "Status", "Operator", "Date"],
-      ...visible.map((item) => [item.id, item.customer, item.card, item.type, item.amount, item.status, item.operatorName, item.date]),
+      ["Transaction ID", "Customer", "NFC Card", "Type", "Payment method", "Amount", "Unit", "Status", "Operator", "Date"],
+      ...visible.map((item) => [item.id, item.customer, item.card, item.type, paymentMethod(item, transactions), item.amount, paymentMethod(item, transactions) === "CASH" ? "cash" : "BP", item.status, item.operatorName, item.date]),
     ]
     const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n")
     const link = document.createElement("a")
@@ -47,13 +51,15 @@ function Transactions() {
 
   return (
     <div className="mx-auto max-w-[1600px]">
-      <PageHeader eyebrow="LEDGER" title="Transactions" description="Business purchases, shared wallet loads, and BP refunds." action={<Button secondary onClick={exportCsv}><Receipt size={17} />Export CSV</Button>} />
+      <PageHeader eyebrow="LEDGER" title="Transactions" description="Cash and BuzzPoints sales, shared wallet loads, and refunds." action={<Button secondary onClick={exportCsv}><Receipt size={17} />Export CSV</Button>} />
       {(notice || dataError || dataLoading) && (
         <p role={dataError ? "alert" : "status"} className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>
           {dataError ? `Database error: ${dataError}` : notice || "Loading transactions…"}
         </p>
       )}
+      <FinanceSummary summary={summarizeFinance(visible.map((item) => ({ ...item, paymentMethod: paymentMethod(item, transactions) })))} loading={dataLoading} title="Sales audit · filtered transactions" />
       <div className={`${cardClass} mb-6 flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between`}>
+        <label className="text-xs text-[#AAA]">Payment method<select className={`${inputClass} mt-2`} value={method} onChange={(event) => setMethod(event.target.value)}><option value="ALL">Cash and BuzzPoints</option><option value="CASH">Cash</option><option value="BUZZPOINTS">BuzzPoints</option></select></label>
         <div className="relative w-full md:max-w-md">
           <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666]" />
           <input className={`${inputClass} pl-10`} placeholder="Search transaction, customer, card, or operator" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -74,7 +80,7 @@ function Transactions() {
                   <td className="px-5 py-4 font-medium text-white">{item.id}</td>
                   <td className="px-5 py-4"><p className="text-sm text-white">{item.customer}</p><p className="text-xs text-[#666]">{item.card} · {item.workstation}</p></td>
                   <td className="px-5 py-4 text-xs text-[#AAA]">{item.type}</td>
-                  <td className="px-5 py-4 font-semibold text-white">{item.amount.toLocaleString()} {item.type === "CASH_PURCHASE" || item.metadata?.payment_method === "CASH" ? "cash" : "BP"}</td>
+                  <td className="px-5 py-4 font-semibold text-white">{formatAmount(item.amount)} {paymentMethod(item, transactions) === "CASH" ? "cash" : "BP"}</td>
                   <td className="px-5 py-4"><Status>{item.status}</Status></td>
                   <td className="px-5 py-4 text-sm text-white">{item.operatorName}</td>
                   <td className="px-5 py-4 text-xs text-[#777]">{item.date}</td>
@@ -99,7 +105,8 @@ function Transactions() {
               ["Transaction ID", selectedTransaction.id],
               ["Customer", selectedTransaction.customer],
               ["Type", selectedTransaction.type],
-              ["Amount (stored unit)", selectedTransaction.amount],
+              ["Payment method", paymentMethod(selectedTransaction, transactions) === "CASH" ? "Cash" : "BuzzPoints"],
+              ["Amount", `${formatAmount(selectedTransaction.amount)} ${paymentMethod(selectedTransaction, transactions) === "CASH" ? "cash" : "BP"}`],
               ["Status", selectedTransaction.status],
               ["Card", selectedTransaction.card],
               ["Workstation", selectedTransaction.workstation],

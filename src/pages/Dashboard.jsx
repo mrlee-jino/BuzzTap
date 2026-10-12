@@ -1,15 +1,18 @@
 import { Activity, Coins, Users, WalletCards } from "lucide-react"
 import { useBusiness } from "../businessContext"
 import { Status, cardClass } from "../components/BusinessUI"
+import FinanceSummary from "../components/FinanceSummary"
+import SalesChart from "../components/SalesChart"
+import { isCompleted as completed, isSale, summarizeFinance, formatAmount } from "../lib/businessFinance"
 
-const completed = (item) => String(item.status || "").toUpperCase() === "COMPLETED"
 
 function Dashboard() {
   const {
     wallet,
     customers,
     transactions,
-    ledger,
+    financeAudit,
+    finance,
     cards,
     workstations,
     dataLoading,
@@ -18,56 +21,51 @@ function Dashboard() {
 
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const customerPurchases = transactions.filter(
-    (item) => item.type === "CUSTOMER_PURCHASE" && completed(item),
+  const customerPurchases = financeAudit.filter(
+    (item) => isSale(item) && (completed(item) || item.status === "REFUNDED"),
   )
   const todaysPurchases = customerPurchases.filter(
     (item) => new Date(item.created_at) >= todayStart,
   )
+  const todayFinance = summarizeFinance(financeAudit.filter((item) => new Date(item.created_at) >= todayStart))
   const monthlyVolumes = Array.from({ length: 12 }, (_, index) => {
     const month = new Date(now.getFullYear(), now.getMonth() - 11 + index, 1)
     return {
       key: `${month.getFullYear()}-${month.getMonth()}`,
       label: month.toLocaleDateString(undefined, { month: "short" }),
-      amount: 0,
+      cash: 0,
+      bp: 0,
     }
   })
   const bucketMap = new Map(monthlyVolumes.map((bucket) => [bucket.key, bucket]))
   customerPurchases.forEach((item) => {
     const date = new Date(item.created_at)
     const bucket = bucketMap.get(`${date.getFullYear()}-${date.getMonth()}`)
-    if (bucket) bucket.amount += Number(item.amount || 0)
+    if (bucket) bucket[item.paymentMethod === "CASH" ? "cash" : "bp"] += Number(item.amount || 0)
   })
-  const maxVolume = Math.max(...monthlyVolumes.map((item) => item.amount), 1)
-  const recentActivity = [
-    ...transactions
+  const recentActivity = financeAudit
       .filter(completed)
       .map((item) => ({
-        id: `transaction-${item.id}`,
+        id: `${item.source}-${item.id}`,
         action: item.type.replaceAll("_", " "),
-        target: item.customer,
+        target: item.customer || customers.find((customer) => customer.id === item.customer_id)?.name || "Business wallet",
         amount: item.amount,
         timestamp: item.created_at,
         reference: item.id,
-      })),
-    ...ledger
-      .filter(completed)
-      .map((item) => ({
-        id: `ledger-${item.id}`,
-        action: item.type.replaceAll("_", " "),
-        target: customers.find((customer) => customer.id === item.customer_id)?.name || "Business wallet",
-        amount: item.amount,
-        timestamp: item.created_at,
-        reference: item.reference || item.id,
-      })),
-  ]
+        unit: item.unit,
+      }))
     .sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp))
     .slice(0, 3)
   const stats = [
     {
-      label: "Today's Customer Purchases",
-      value: `${todaysPurchases.reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString()} BP`,
-      description: "Completed transaction amounts",
+      label: "Today's Cash Sales",
+      value: `${formatAmount(todayFinance.cashNet)} cash`,
+      description: "Cash sales less cash refunds",
+    },
+    {
+      label: "Today's BuzzPoints Sales",
+      value: `${formatAmount(todayFinance.bpNet)} BP`,
+      description: `${todaysPurchases.length} completed sales across both methods`,
     },
     {
       label: "Today's Completed Transactions",
@@ -87,7 +85,7 @@ function Dashboard() {
     {
       label: "Available Customized Buzz Points",
       value: `${wallet.balance.toLocaleString()} BP`,
-      description: "Purchased less distributed",
+      description: "Current shared business wallet balance",
     },
   ]
 
@@ -105,7 +103,7 @@ function Dashboard() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {stats.map((stat) => (
           <div key={stat.label} className="group rounded-2xl border border-[#222] bg-[#111] p-6 shadow-[8px_8px_25px_rgba(0,0,0,0.35),-5px_-5px_20px_rgba(255,255,255,0.015)] transition-all duration-300 hover:-translate-y-1 hover:border-[#F5C400]/40 hover:shadow-[0_12px_35px_rgba(245,196,0,0.08)]">
             <p className="text-sm text-[#777]">{stat.label}</p>
@@ -115,6 +113,7 @@ function Dashboard() {
         ))}
       </div>
 
+      <FinanceSummary summary={finance} loading={dataLoading} title="Business sales audit · all time" />
       <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
         <div className={cardClass}><div className="flex items-center gap-3"><Coins className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Customized Buzz Points Collected</p><p className="mt-1 text-2xl font-bold text-white">{wallet.collected.toLocaleString()} BP</p></div></div></div>
         <div className={cardClass}><div className="flex items-center gap-3"><Users className="text-[#F5C400]" /><div><p className="text-sm text-[#777]">Active Customers</p><p className="mt-1 text-2xl font-bold text-white">{customers.filter((item) => item.status === "ACTIVE").length}</p></div></div></div>
@@ -123,16 +122,9 @@ function Dashboard() {
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <section className={`${cardClass} min-h-[320px] xl:col-span-2`}>
-          <h2 className="text-lg font-semibold text-white">Customer purchase volume</h2>
-          <p className="mt-1 text-sm text-[#666]">Completed customer purchases, in BP, by month</p>
-          <div className="mt-8 flex h-48 items-end gap-3" aria-label="Monthly customer purchase volume chart">
-            {monthlyVolumes.map((item) => (
-              <div key={item.key} className="flex h-full flex-1 flex-col justify-end">
-                <div title={`${item.label}: ${item.amount.toLocaleString()} BP`} className="w-full rounded-t-lg bg-[#F5C400]/30 transition-colors hover:bg-[#F5C400]" style={{ height: `${item.amount ? Math.max((item.amount / maxVolume) * 100, 3) : 0}%` }} />
-                <span className="mt-2 text-center text-[10px] text-[#777]">{item.label}</span>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-lg font-semibold text-white">Cash and BuzzPoints sales by month</h2>
+          <p className="mt-1 text-sm text-[#666]">Gross sales shown in their original payment units</p>
+          <SalesChart buckets={monthlyVolumes} label="Monthly cash and BuzzPoints sales" />
         </section>
 
         <section className={cardClass}>
@@ -154,7 +146,7 @@ function Dashboard() {
               <div className="border-t border-[#242424] pt-3" key={item.id}>
                 <p className="text-sm capitalize text-white">{item.action}</p>
                 <p className="mt-1 text-xs text-[#777]">{item.target} · {new Date(item.timestamp).toLocaleString()}</p>
-                <Status>{Number(item.amount || 0).toLocaleString()} BP · {item.reference}</Status>
+                <Status>{formatAmount(item.amount)} {item.unit} · {item.reference}</Status>
               </div>
             ))}
           </div>

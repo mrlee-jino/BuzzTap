@@ -4,6 +4,7 @@ import { supabase } from "./lib/supabaseClient"
 import { BusinessContext } from "./businessContext"
 import { useAuth } from "./context/useAuth"
 import { nextProductId } from "./lib/catalog"
+import { financialAudit, summarizeFinance } from "./lib/businessFinance"
 
 const emptyWallet = { purchased: 0, distributed: 0, collected: 0, pendingSettlement: 0, settled: 0, balance: 0 }
 const defaultNotifications = {
@@ -127,7 +128,6 @@ export function BusinessProvider({ children, selectedMembership }) {
         const amount = money(item.amount)
         if (item.type === "PURCHASE") result.purchased += amount
         if (item.type === "CUSTOMER_LOAD") result.distributed += amount
-        if (item.type === "CUSTOMER_PURCHASE") result.collected += amount
         return result
       }, { ...emptyWallet })
       walletTotals.purchased += (purchaseResult.data || [])
@@ -139,9 +139,8 @@ export function BusinessProvider({ children, selectedMembership }) {
       for (const item of transactionResult.data || []) {
         if (!item.metadata?.shared_transfer_id || item.status !== "COMPLETED") continue
         if (item.type === "CUSTOMER_LOAD") walletTotals.distributed += money(item.amount)
-        if (item.type === "CUSTOMER_PURCHASE") walletTotals.collected += money(item.amount)
-        if (item.type === "REFUND") walletTotals.collected -= money(item.amount)
       }
+      walletTotals.collected = summarizeFinance(financialAudit(transactionResult.data || [], ledger)).bpNet
       const customerName = (id) => customers.find((item) => item.id === id)?.name || "Unknown customer"
       const profileById = (profileResult.data || []).reduce((result, item) => {
         result[item.id] = item
@@ -158,7 +157,7 @@ export function BusinessProvider({ children, selectedMembership }) {
           productName: (productResult.data || []).find((product) => product.id === item.product_id)?.name || item.product_id,
           operatorName: profileById[item.created_by]?.full_name || profileById[item.created_by]?.email || "Unknown member",
         })),
-        ledger,
+        ledger: ledger.map((item) => ({ ...item, customer: item.customer_id ? customerName(item.customer_id) : "Business wallet", operatorName: profileById[item.created_by]?.full_name || profileById[item.created_by]?.email || "Unknown member" })),
         cards: (cardResult.data || []).map((item) => ({ ...item, customer: item.customer_id ? customerName(item.customer_id) : "-" })),
         transactions: (transactionResult.data || []).map((item) => ({ ...item, customer: item.customer_id ? customerName(item.customer_id) : item.metadata?.guest_name || "Local customer", card: item.card_id || "-", workstation: item.workstation_id || "-", operatorName: profileById[item.created_by]?.full_name || profileById[item.created_by]?.email || "Unknown member", date: displayDate(item.created_at), amount: money(item.amount) })),
         staff: (invitationResult.data || []).map((item) => ({ ...item, name: item.name || item.email, email: item.email, invitation_status: item.status })),
@@ -474,12 +473,14 @@ export function BusinessProvider({ children, selectedMembership }) {
     return { success: true }
   }
   const authenticateStaff = async (customerId) => data.customers.find((item) => item.id === customerId && item.status === "ACTIVE") || null
+  const financeAudit = useMemo(() => financialAudit(data.transactions, data.ledger), [data.transactions, data.ledger])
+  const finance = useMemo(() => summarizeFinance(financeAudit), [financeAudit])
 
   return (
     <BusinessContext.Provider value={{
       user, profile, memberships, activeMemberships, currentMembership, business, businessRole,
       isAuthenticated, authLoading, authError, dataLoading, dataError, refreshBusinessData: loadData,
-      ...data, wallet, authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
+      ...data, wallet, finance, financeAudit, authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
       updateCustomerStatus, addCard, assignCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, updateProductType, deleteProduct,
       addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, deleteStaff, purchaseInventory,
       requestPurchase, requestSettlement, saveBusinessSettings, changeWorkstationSession,

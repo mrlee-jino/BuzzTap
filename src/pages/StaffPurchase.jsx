@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { Package, Plus, Minus } from "lucide-react"
 import { useBusiness } from "../businessContext"
+import FinanceSummary from "../components/FinanceSummary"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 export default function StaffPurchase() {
-  const { products, customers, inventoryMovements, checkoutProduct, dataLoading, dataError } = useBusiness()
+  const { products, customers, finance, inventoryMovements, checkoutProduct, dataLoading, dataError } = useBusiness()
   const [selected, setSelected] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [notice, setNotice] = useState("")
@@ -64,6 +65,7 @@ export default function StaffPurchase() {
           {dataError ? `Database error: ${dataError}` : notice || "Loading inventory…"}
         </p>
       )}
+      <FinanceSummary summary={finance} loading={dataLoading} title="Business sales audit · all time" />
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className={cardClass}>
           <h2 className="mb-5 text-xl font-semibold text-white">Available stock</h2>

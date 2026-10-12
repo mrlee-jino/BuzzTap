@@ -17,7 +17,7 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
  create table customers(id uuid primary key,business_id uuid,profile_id uuid,name text,status text);
  create table business_bp_wallets(business_id uuid primary key,balance bigint check(balance>=0),updated_at timestamptz);
  create table customer_bp_wallets(customer_id uuid primary key,balance bigint check(balance>=0),updated_at timestamptz);
- create table business_transactions(id uuid primary key default gen_random_uuid(),business_id uuid,customer_id text,workstation_id text,type text,amount numeric,status text,metadata jsonb,created_by uuid);
+ create table business_transactions(id uuid primary key default gen_random_uuid(),business_id uuid,customer_id text,workstation_id text,type text,amount numeric,status text,metadata jsonb,created_by uuid,created_at timestamptz default now());
  create table transactions(id uuid primary key default gen_random_uuid(),transaction_code text unique,customer_id uuid,business_id uuid,transaction_type text,status text,amount_bp bigint,description text,metadata jsonb,completed_at timestamptz);
  create table audit_logs(actor_user_id uuid,action text,target_type text,target_id uuid,details jsonb);
  create table workstations(id uuid primary key,business_id uuid,status text,rate numeric default 25);
@@ -117,6 +117,8 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
  await db.exec(fs.readFileSync('supabase/migrations/20261011000012_product_checkout_payments.sql','utf8'));
  const checkout = (customer,guest,method,cash,request) => call("select checkout_product_purchase($1,'PROD-1',1,$2,$3,$4,$5,$6) as id",[b,customer,guest,method,cash,request]);
  const cashRequest='12345678-1111-1111-1111-111111111111';
+ await db.exec(fs.readFileSync('supabase/migrations/20261012000002_cash_payment_audit.sql','utf8'));
+ const businessBalanceBeforeCash=Number((await call('select balance from business_bp_wallets where business_id=$1',[b])).balance);
  const cashSale=await checkout(null,'Local buyer','CASH',49.50,cashRequest);
  assert.equal((await checkout(null,'Local buyer','CASH',49.50,cashRequest)).id,cashSale.id);
  assert.equal(Number((await call('select stock from products_services')).stock),9);
@@ -124,6 +126,14 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
  const cashRecord=await call('select * from business_transactions where id=$1',[cashSale.id]);
  assert.equal(cashRecord.type,'CASH_PURCHASE'); assert.equal(Number(cashRecord.amount),49.5);
  assert.equal(cashRecord.metadata.guest_name,'Local buyer'); assert.equal(cashRecord.customer_id,null);
+ const cashAudit=await call("select * from audit_logs where action='BUSINESS_CASH_PAYMENT' and target_id=$1",[cashSale.id]);
+ assert.equal(Number(cashAudit.details.amount),49.5);
+ assert.equal(cashAudit.details.payment_method,'CASH');
+ assert.equal(cashAudit.details.metadata.guest_name,'Local buyer');
+ assert.equal(Number((await call('select balance from business_bp_wallets where business_id=$1',[b])).balance),businessBalanceBeforeCash);
+ assert.equal(Number((await call("select count(*) as count from audit_logs where action='BUSINESS_CASH_PAYMENT' and target_id=$1",[cashSale.id])).count),1);
+ await db.exec(fs.readFileSync('supabase/migrations/20261012000002_cash_payment_audit.sql','utf8'));
+ assert.equal(Number((await call("select count(*) as count from audit_logs where action='BUSINESS_CASH_PAYMENT' and target_id=$1",[cashSale.id])).count),1);
  await assert.rejects(checkout(null,'Local buyer','CASH',50,cashRequest),/different checkout/);
  await assert.rejects(checkout(null,'Local buyer','BUZZPOINTS',null,'12345678-1111-1111-1111-111111111112'),/cash only/);
  await assert.rejects(checkout(null,'','CASH',49,'12345678-1111-1111-1111-111111111113'),/customer name/);

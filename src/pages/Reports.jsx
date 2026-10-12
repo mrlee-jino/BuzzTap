@@ -2,9 +2,11 @@ import { BarChart3, Download, TrendingUp } from "lucide-react"
 import { useState } from "react"
 import { useBusiness } from "../businessContext"
 import { Button, PageHeader, cardClass } from "../components/BusinessUI"
+import FinanceSummary from "../components/FinanceSummary"
+import SalesChart from "../components/SalesChart"
+import { isCompleted, isSale, isRefund, summarizeFinance } from "../lib/businessFinance"
 
 const periods = ["7 Days", "30 Days", "90 Days", "This Year"]
-const isCompleted = (item) => String(item.status || "").toUpperCase() === "COMPLETED"
 
 function rangeFor(period, now = new Date()) {
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
@@ -18,7 +20,7 @@ function Reports() {
   const [period, setPeriod] = useState("30 Days")
   const {
     transactions,
-    ledger,
+    financeAudit,
     customers,
     inventoryMovements,
     workstationSessions,
@@ -33,12 +35,10 @@ function Reports() {
   }
   const periodTransactions = transactions.filter((item) => inPeriod(item.created_at))
   const completedTransactions = periodTransactions.filter(isCompleted)
-  const customerPurchases = completedTransactions.filter((item) => item.type === "CUSTOMER_PURCHASE")
-  const completedLedger = ledger.filter((item) => isCompleted(item) && inPeriod(item.created_at))
-  const collectedPoints = completedLedger
-    .filter((item) => item.type === "CUSTOMER_PURCHASE")
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
-  const purchaseVolume = customerPurchases.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const periodAudit = financeAudit.filter((item) => inPeriod(item.created_at))
+  const finance = summarizeFinance(periodAudit)
+  const customerPurchases = periodAudit.filter((item) => isSale(item) && (isCompleted(item) || item.status === "REFUNDED"))
+  const salesAudit = periodAudit.filter((item) => (isSale(item) || isRefund(item)) && (isCompleted(item) || (isSale(item) && item.status === "REFUNDED")))
   const newCustomers = customers.filter((item) => inPeriod(item.created_at)).length
   const issues = inventoryMovements.filter((item) => item.movement_type === "ISSUE" && inPeriod(item.created_at))
   const productIssues = new Map()
@@ -66,7 +66,8 @@ function Reports() {
       label: period === "This Year"
         ? bucketStart.toLocaleDateString(undefined, { month: "short" })
         : bucketStart.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-      amount: 0,
+      cash: 0,
+      bp: 0,
     }
   })
   customerPurchases.forEach((item) => {
@@ -77,12 +78,16 @@ function Reports() {
         bucketCount - 1,
         Math.floor(((date.getTime() - start.getTime()) / interval) * bucketCount),
       )
-    if (index >= 0) buckets[index].amount += Number(item.amount || 0)
+    if (index >= 0) buckets[index][item.paymentMethod === "CASH" ? "cash" : "bp"] += Number(item.amount || 0)
   })
-  const maxVolume = Math.max(...buckets.map((item) => item.amount), 1)
   const reportRows = [
-    ["Customer purchases (BP)", purchaseVolume],
-    ["Buzz Points collected", collectedPoints],
+    ["Cash sales (cash)", finance.cashSales],
+    ["Cash refunds (cash)", finance.cashRefunds],
+    ["Net cash sales (cash)", finance.cashNet],
+    ["BuzzPoints sales (BP)", finance.bpSales],
+    ["BuzzPoints refunds (BP)", finance.bpRefunds],
+    ["Net BuzzPoints sales (BP)", finance.bpNet],
+    ["Completed sales (cash and BP)", finance.salesCount],
     ["New customers", newCustomers],
     ["Completed transactions", completedTransactions.length],
     ["Inventory items issued", issues.reduce((sum, item) => sum + Number(item.quantity || 0), 0)],
@@ -94,8 +99,14 @@ function Reports() {
       ["Metric", "Value"],
       ...reportRows,
       [],
-      ["Period bucket", "Customer purchases (BP)"],
-      ...buckets.map((item) => [item.label, item.amount]),
+      ["Period bucket", "Cash sales (cash)", "BuzzPoints sales (BP)"],
+      ...buckets.map((item) => [item.label, item.cash, item.bp]),
+      [],
+      ["Record ID", "Source", "Type", "Payment method", "Amount", "Unit", "Customer", "Product ID", "Quantity", "Workstation", "Operator", "Date", "Original transaction"],
+      ...salesAudit.map((item) => [item.id, item.source, item.type, item.paymentMethod, item.amount, item.unit,
+        item.customer || customers.find((customer) => customer.id === item.customer_id)?.name || "Business wallet",
+        item.metadata?.product_id || "", item.metadata?.quantity || "", item.workstation_id || "",
+        item.operatorName || item.created_by || "", item.created_at, item.metadata?.original_transaction_id || ""]),
       [],
       ["Product ID", "Inventory items issued"],
       ...topProducts.map((item) => [item.productId, item.quantity]),
@@ -130,10 +141,9 @@ function Reports() {
           </button>
         ))}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <FinanceSummary summary={finance} loading={dataLoading} title={`Business sales audit · ${period}`} />
+      <div className="grid gap-4 sm:grid-cols-2">
         {[
-          ["Customer purchases (BP)", `${purchaseVolume.toLocaleString()} BP`],
-          ["Buzz Points collected", `${collectedPoints.toLocaleString()} BP`],
           ["New customers", String(newCustomers)],
           ["Completed transactions", String(completedTransactions.length)],
         ].map(([label, value]) => (
@@ -147,19 +157,26 @@ function Reports() {
       <section className={`${cardClass} mt-6`}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Customer purchase volume (BP)</h2>
-            <p className="mt-1 text-sm text-[#666]">{period} completed customer purchases</p>
+            <h2 className="text-lg font-semibold text-white">Cash and BuzzPoints sales</h2>
+            <p className="mt-1 text-sm text-[#666]">{period} gross sales in their original payment units</p>
           </div>
           <TrendingUp className="text-[#F5C400]" />
         </div>
-        <div className="mt-8 flex h-56 items-end gap-3" aria-label={`${period} customer purchase volume chart`}>
-          {buckets.map((item, index) => (
-            <div className="flex h-full flex-1 flex-col justify-end" key={`${item.label}-${index}`}>
-              <div title={`${item.label}: ${item.amount.toLocaleString()} BP`} className="w-full rounded-t-lg bg-[#F5C400]/25 hover:bg-[#F5C400]" style={{ height: `${item.amount ? Math.max((item.amount / maxVolume) * 100, 3) : 0}%` }} />
-              <span className="mt-2 text-center text-[10px] text-[#777]">{item.label}</span>
-            </div>
-          ))}
-        </div>
+        <SalesChart buckets={buckets} label={`${period} cash and BuzzPoints sales chart`} />
+      </section>
+      <section className={`${cardClass} mt-6`}>
+        <h2 className="text-lg font-semibold text-white">Combined cash and BuzzPoints audit</h2>
+        <p className="mt-1 text-sm text-[#777]">Sales and refunds for {period}. Export CSV includes every record in this period.</p>
+        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm">
+          <thead className="border-b border-[#292929] text-xs text-[#777]"><tr>{["Reference", "Customer", "Type", "Payment", "Amount", "Operator", "Date"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead>
+          <tbody>{salesAudit.slice(0, 50).map((item) => <tr key={`${item.source}-${item.id}`} className="border-b border-[#222] text-[#AAA]">
+            <td className="p-3">{item.id}</td><td className="p-3">{item.customer || customers.find((customer) => customer.id === item.customer_id)?.name || "Business wallet"}</td>
+            <td className="p-3">{item.type}</td><td className="p-3">{item.paymentMethod === "CASH" ? "Cash" : "BuzzPoints"}</td>
+            <td className="p-3 text-white">{Number(item.amount).toLocaleString()} {item.unit}</td><td className="p-3">{item.operatorName || item.created_by || "Unknown member"}</td><td className="p-3">{new Date(item.created_at).toLocaleString()}</td>
+          </tr>)}</tbody>
+        </table></div>
+        {!salesAudit.length && <p className="mt-4 text-sm text-[#777]">No sales or refunds in this period.</p>}
+        {salesAudit.length > 50 && <p className="mt-4 text-xs text-[#777]">Showing the latest 50 of {salesAudit.length} records. Export CSV for the full audit.</p>}
       </section>
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <div className={cardClass}>
