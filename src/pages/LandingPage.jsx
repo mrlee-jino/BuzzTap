@@ -20,6 +20,7 @@ const features = [
 ]
 
 const faqs = [
+  { question: "What is the difference between BP and Customized BuzzPoints?", answer: "BuzzPoints (BP) use the shared wallet. Customized BuzzPoints (CBP) are rebates issued by a specific business for eligible cash or BP purchases. Customers can redeem CBP only at that business. CBP cannot be transferred to shared wallets or included in BP settlement requests." },
   { question: "What can I use BuzzTap for?", answer: "BuzzTap brings product sales, stock, paid workstation sessions, customers, BuzzPoints, and business reports into one workspace. It is especially useful for computer shops, gaming spaces, and cafés that manage both products and customer visits." },
   { question: "Can a customer buy without a BuzzTap account?", answer: "Yes. Local customers can buy products with cash, and guests can purchase cash workstation sessions. A BuzzTap account is required for shared BuzzPoints payments. You can also save local customer details in your customer list." },
   { question: "Does a cash sale change the BuzzPoints balance?", answer: "No. Cash sales are recorded as business transactions and included in cash sales reports. Cash and BP appear together in the audit, but their totals remain separate; the system does not assume a cash-to-BP conversion rate." },

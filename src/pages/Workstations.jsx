@@ -113,7 +113,7 @@ function Workstations() {
               <p className="mt-6 text-xs text-[#666]">{item.workstation_code || item.id} · {item.type}</p>
               <h2 className="mt-2 text-xl font-semibold text-white">{item.name}</h2>
               <p className="mt-2 text-sm text-[#777]">{item.location} · {item.device}</p>
-              <p className="mt-4 font-semibold text-[#F5C400]">{item.rate} cash/hour · {item.rate} BP/hour</p>
+              <p className="mt-4 font-semibold text-[#F5C400]">{item.rate} cash/hour · {item.rate} BP or CBP/hour</p>
               {item.status === "IN_USE" && <div className="mt-4 rounded-xl border border-[#F5C400]/20 bg-[#F5C400]/5 p-3">
                 <p className="text-xs text-[#AAA]">Customer</p>
                 <p className="mt-1 font-semibold text-white">{sessionCustomerName(activeSession, customers)}</p>
@@ -134,12 +134,12 @@ function Workstations() {
         }) : <div className={`${cardClass} text-center text-sm text-[#666]`}>{dataLoading ? "Loading workstations…" : "No workstations found."}</div>}
       </div>
       {sessionStation && <Modal title={`Start Session · ${sessionStation.name}`} onClose={() => { if (!busyId) setSessionStation(null) }}><form onSubmit={startSession} className="space-y-4">
-        <Field label="Payment method"><select className={inputClass} value={paymentMethod} disabled={Boolean(busyId)} onChange={(event) => { setPaymentMethod(event.target.value); setRequestId(crypto.randomUUID()) }}><option value="CASH">Cash</option>{customerType === "REGISTERED" && <option value="BUZZPOINTS">BuzzPoints</option>}</select></Field>
+        <Field label="Payment method"><select className={inputClass} value={paymentMethod} disabled={Boolean(busyId)} onChange={(event) => { setPaymentMethod(event.target.value); setRequestId(crypto.randomUUID()) }}><option value="CASH">Cash</option>{customerType === "REGISTERED" && <><option value="BUZZPOINTS">BuzzPoints (shared BP)</option><option value="CUSTOMIZED">Customized BuzzPoints (this business)</option></>}</select></Field>
         <Field label="User Account"><select className={inputClass} value={customerType} disabled={Boolean(busyId)} onChange={(event) => { setRequestId(crypto.randomUUID()); setCustomerType(event.target.value); setPaymentMethod("CASH") }}><option value="REGISTERED">Registered customer</option><option value="GUEST">Non-registered customer</option></select></Field>
-        {customerType === "REGISTERED" ? <PaymentCustomer key={paymentMethod} allowTap={paymentMethod === "BUZZPOINTS"} linkedOnly={paymentMethod === "BUZZPOINTS"} disabled={Boolean(busyId)} onChange={() => setRequestId(crypto.randomUUID())} /> : <Field label="Guest name"><input className={inputClass} name="guestName" onChange={() => setRequestId(crypto.randomUUID())} required maxLength={160} disabled={Boolean(busyId)} placeholder="Customer name" /></Field>}
+        {customerType === "REGISTERED" ? <PaymentCustomer key={paymentMethod} allowTap={paymentMethod !== "CASH"} linkedOnly={paymentMethod !== "CASH"} disabled={Boolean(busyId)} onChange={() => setRequestId(crypto.randomUUID())} /> : <Field label="Guest name"><input className={inputClass} name="guestName" onChange={() => setRequestId(crypto.randomUUID())} required maxLength={160} disabled={Boolean(busyId)} placeholder="Customer name" /></Field>}
         {customerType === "GUEST" && <p className="text-xs text-[#AAA]">BuzzPoints payments require a registered customer wallet.</p>}
-        <p className="text-xs text-[#AAA]">Session time is calculated automatically from the amount paid at {sessionStation.rate} {paymentMethod === "CASH" ? "cash" : "BP"}/hour.</p>
-        <Field label={`Amount purchased (${paymentMethod === "BUZZPOINTS" ? "BP" : "cash"})`}><input className={inputClass} name="amount" required type="number" min={paymentMethod === "BUZZPOINTS" ? "1" : "0.01"} step={paymentMethod === "BUZZPOINTS" ? "1" : "0.01"} onChange={() => setRequestId(crypto.randomUUID())} disabled={Boolean(busyId)} placeholder="Enter amount" /></Field>
+        <p className="text-xs text-[#AAA]">Session time is calculated automatically from the amount paid at {sessionStation.rate} {paymentMethod === "CASH" ? "cash" : paymentMethod === "CUSTOMIZED" ? "CBP" : "BP"}/hour.</p>
+        <Field label={`Amount purchased (${paymentMethod === "CASH" ? "cash" : paymentMethod === "CUSTOMIZED" ? "CBP" : "BP"})`}><input className={inputClass} name="amount" required type="number" min={paymentMethod !== "CASH" ? "1" : "0.01"} step={paymentMethod !== "CASH" ? "1" : "0.01"} onChange={() => setRequestId(crypto.randomUUID())} disabled={Boolean(busyId)} placeholder="Enter amount" /></Field>
         {sessionError && <p role="alert" className="text-sm text-red-300">{sessionError}</p>}
         <Button type="submit" disabled={Boolean(busyId)}>{busyId ? "Starting…" : "Confirm and Start Session"}</Button>
       </form></Modal>}

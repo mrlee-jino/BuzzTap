@@ -22,6 +22,9 @@ const emptyData = {
   settlementRequests: [],
   cards: [],
   products: [],
+  customizedBalances: [],
+  rebateLedger: [],
+  rebateDataError: null,
   nextCatalogProductId: "PROD-001",
   workstations: [],
   workstationSessions: [],
@@ -104,8 +107,10 @@ export function BusinessProvider({ children, selectedMembership }) {
         ["OWNER", "MANAGER", "CASHIER"].includes(businessRole)
           ? supabase.rpc("get_business_shared_bp", { p_business_id: bid })
           : Promise.resolve({ data: { customers: [], business_balance: null }, error: null }),
+        supabase.from("business_customized_bp_wallets").select("*").eq("business_id",bid),
+        supabase.from("business_customized_bp_ledger").select("*").eq("business_id",bid).order("created_at",{ascending:false}),
       ])
-      const failure = queries.find((result) => result.error)
+      const failure = queries.slice(0,16).find((result) => result.error)
       if (failure) {
         setDataError(failure.error.message)
         return
@@ -115,6 +120,7 @@ export function BusinessProvider({ children, selectedMembership }) {
         ledgerResult, transactionResult, invitationResult, accessLogResult,
         profileResult, purchaseResult, settlementResult, contentResult,
         sessionResult, movementResult, preferencesResult, sharedWalletResult,
+        customizedWalletResult, rebateLedgerResult,
       ] = queries
       const ledger = ledgerResult.data || []
       const completedLedger = ledger.filter((item) => String(item.status || "").toUpperCase() === "COMPLETED")
@@ -124,6 +130,7 @@ export function BusinessProvider({ children, selectedMembership }) {
         ...item,
         wallet: customerBalances[item.id]?.balance ?? null,
         profileStatus: customerBalances[item.id]?.profileStatus,
+        customizedBalance: Number((customizedWalletResult.data || []).find((wallet) => wallet.profile_id === item.profile_id)?.balance || 0),
         card: (cardResult.data || []).find((card) => card.customer_id === item.id && card.status === "ACTIVE")?.card_code || null,
       }))
       const walletTotals = completedLedger.reduce((result, item) => {
@@ -150,6 +157,9 @@ export function BusinessProvider({ children, selectedMembership }) {
       }, {})
       setData({
         customers,
+        customizedBalances: customizedWalletResult.data || [],
+        rebateLedger: rebateLedgerResult.data || [],
+        rebateDataError: customizedWalletResult.error?.message || rebateLedgerResult.error?.message || null,
         products: (productResult.data || []).filter((item) => !item.deleted_at).map((item) => ({ ...item, price: money(item.price), stock: Number(item.stock || 0) })),
         nextCatalogProductId: nextProductId(productResult.data || []),
         workstations: (workstationResult.data || []).map((item) => ({ ...item, rate: money(item.rate) })),
@@ -302,7 +312,7 @@ export function BusinessProvider({ children, selectedMembership }) {
   }
   const refund = async (item) => {
     if (!business?.id) return { success: false, error: "No active business is available." }
-    const { data: refundId, error } = await supabase.rpc("refund_shared_customer_bp", {
+    const { data: refundId, error } = await supabase.rpc(item.type === "CUSTOMIZED_PURCHASE" ? "refund_business_customized_bp" : "refund_shared_customer_bp", {
       p_business_id: business.id,
       p_transaction_id: item.id,
     })

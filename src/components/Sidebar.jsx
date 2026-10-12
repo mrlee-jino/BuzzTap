@@ -10,6 +10,7 @@ import {
   Settings,
   WalletCards,
   ClipboardList,
+  Gift,
   ChevronRight,
   LogOut,
   Megaphone,
@@ -64,9 +65,14 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       icon: BarChart3,
     },
     {
-      name: "Customized Buzz Points Wallet",
+      name: "BuzzPoints Wallet",
       path: "/wallet",
       icon: WalletCards,
+    },
+    {
+      name: "Rebates & Customized BP",
+      path: "/rebates",
+      icon: Gift,
     },
     {
       name: "System Logs",
@@ -174,7 +180,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
         </div>
 
         <div className="space-y-2">
-          {menuItems.filter((item) => item.path !== "/system-logs" || ["OWNER", "MANAGER"].includes(businessRole)).map((item) => {
+          {menuItems.filter((item) => !["/system-logs","/rebates"].includes(item.path) || ["OWNER", "MANAGER"].includes(businessRole)).map((item) => {
             const Icon = item.icon
 
             return (

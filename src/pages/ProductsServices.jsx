@@ -6,7 +6,7 @@ import { catalogCategories } from "../lib/catalog"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 function ProductsServices() {
-  const { products, nextCatalogProductId, purchase, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
+  const { products, nextCatalogProductId, purchase, checkoutProduct, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
   const [query, setQuery] = useState("")
   const [modal, setModal] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -17,6 +17,7 @@ function ProductsServices() {
   const [notice, setNotice] = useState("")
   const [checkout, setCheckout] = useState(null)
   const [paying, setPaying] = useState(false)
+  const [catalogPaymentMethod, setCatalogPaymentMethod] = useState("BUZZPOINTS")
   const [paymentError, setPaymentError] = useState("")
   const [purchaseRequestId, setPurchaseRequestId] = useState(() => crypto.randomUUID())
   const [deleteItem, setDeleteItem] = useState(null)
@@ -40,9 +41,9 @@ function ProductsServices() {
     setPaying(true)
     setPaymentError("")
     try {
-      const result = await purchase({ customerId: form.get("customerId"), productId: checkout.id,
-        quantity: Number(form.get("quantity")), requestId: purchaseRequestId })
-      if (result.success) { setCheckout(null); setNotice("Purchase paid from the customer's shared BP wallet.") }
+      const details = { customerId: form.get("customerId"), productId: checkout.id, quantity: Number(form.get("quantity")), requestId: purchaseRequestId }
+      const result = catalogPaymentMethod === "CUSTOMIZED" ? await checkoutProduct({ ...details,paymentMethod:"CUSTOMIZED" }) : await purchase(details)
+      if (result.success) { setCheckout(null); setNotice(catalogPaymentMethod === "CUSTOMIZED" ? "Purchase paid with business-only Customized BuzzPoints." : "Purchase paid from the customer's shared BP wallet.") }
       else setPaymentError(result.error)
     } catch { setPaymentError("Payment could not be completed. Retry with the same details.") }
     finally { setPaying(false) }
@@ -95,7 +96,7 @@ function ProductsServices() {
               const ok = await updateProductType(product.id, event.target.value)
               setNotice(ok ? `${product.name} item type updated.` : "Item type update failed.")
             }}><option value="PRODUCT">Product</option><option value="SERVICE">Service</option><option value="WORKSTATION">From Workstation</option></select></Field>
-            {(product.item_type || "PRODUCT") === "PRODUCT" && product.status === "ACTIVE" && <Button secondary disabled={!product.stock} onClick={() => { setCheckout(product); setPurchaseRequestId(crypto.randomUUID()); setPaymentError("") }}>Customer BP Purchase</Button>}
+            {(product.item_type || "PRODUCT") === "PRODUCT" && product.status === "ACTIVE" && <Button secondary disabled={!product.stock} onClick={() => { setCheckout(product); setPurchaseRequestId(crypto.randomUUID()); setPaymentError("") }}>Customer points purchase</Button>}
             <div className="mt-6 flex items-center justify-between border-t border-[#242424] pt-4">
               <div>
                 <span className="text-xl font-bold text-[#F5C400]">{product.price} BP</span>
@@ -125,17 +126,18 @@ function ProductsServices() {
         <Field label="Description"><textarea className={inputClass} name="description" required rows="2" /></Field>
         <Field label="Category"><input className={inputClass} name="category" required placeholder="Choose or enter a category" list="catalog-categories" autoComplete="off" /></Field>
         <datalist id="catalog-categories">{categories.map((category) => <option key={category} value={category} />)}</datalist>
-        <Field label="Catalog Price (currently displayed in BP)"><input className={inputClass} name="price" type="number" min="0" required placeholder="50" /></Field>
+        <Field label="Unit price (cash, BP or CBP)"><input className={inputClass} name="price" type="number" min="0" required placeholder="50" /></Field>
         {itemType === "PRODUCT" && <Field label="Opening Stock Quantity"><input className={inputClass} name="stock" type="number" min="0" step="1" required defaultValue="0" /></Field>}
         {addError && <p role="alert" className="text-sm text-red-300">{addError}</p>}
         <Button type="submit" disabled={adding || dataLoading || !!dataError}>{adding ? "Adding..." : "Add Item"}</Button>
       </form></Modal>}
       {checkout && <Modal title={`Purchase · ${checkout.name}`} onClose={() => { if (!paying) setCheckout(null) }}><form onSubmit={pay} className="space-y-4">
-        <PaymentCustomer disabled={paying} onChange={() => setPurchaseRequestId(crypto.randomUUID())} />
+        <Field label="Payment method"><select className={inputClass} value={catalogPaymentMethod} disabled={paying} onChange={(event)=>{setCatalogPaymentMethod(event.target.value);setPurchaseRequestId(crypto.randomUUID())}}><option value="BUZZPOINTS">BuzzPoints (shared BP)</option><option value="CUSTOMIZED">Customized BuzzPoints (this business)</option></select></Field>
+        <PaymentCustomer key={catalogPaymentMethod} disabled={paying} onChange={() => setPurchaseRequestId(crypto.randomUUID())} />
         <Field label="Quantity"><input className={inputClass} name="quantity" type="number" required min="1" max={checkout.stock} step="1" defaultValue="1" disabled={paying} onChange={() => setPurchaseRequestId(crypto.randomUUID())} /></Field>
-        <p className="text-sm text-[#AAA]">{checkout.price} BP per unit. Payment credits your business BP wallet.</p>
+        <p className="text-sm text-[#AAA]">{checkout.price} {catalogPaymentMethod === "CUSTOMIZED" ? "CBP" : "BP"} per unit. {catalogPaymentMethod === "CUSTOMIZED" ? "Redeems rewards issued by this business; shared BP is unchanged." : "Payment credits your shared business BP wallet."}</p>
         {paymentError && <p role="alert" className="text-sm text-red-300">{paymentError}</p>}
-        <Button type="submit" disabled={paying}>{paying ? "Paying…" : "Pay with Shared BuzzPoints"}</Button>
+        <Button type="submit" disabled={paying}>{paying ? "Paying…" : catalogPaymentMethod === "CUSTOMIZED" ? "Pay with Customized BuzzPoints" : "Pay with Shared BuzzPoints"}</Button>
       </form></Modal>}
       {restockProduct && <Modal title={`Restock ${restockProduct.name}`} onClose={() => setRestockProduct(null)}><form onSubmit={restock} className="space-y-4">
         <p className="text-sm text-[#AAA]">Current stock: <strong className="text-white">{restockProduct.stock}</strong></p>

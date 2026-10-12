@@ -45,10 +45,10 @@ export default function PaymentCustomer({ disabled = false, allowTap = true, lin
     <Field label={mode === "TAP" && allowTap ? "Linked customer account" : "Customer"}>
       <select className={inputClass} name="customerId" required value={customer?.id || ""} disabled={disabled} onChange={(event) => { setSelected(event.target.value); onChange?.() }}>
         <option value="" disabled>{mode === "TAP" && allowTap ? "Tap a registered card to find the account" : "Select customer"}</option>
-        {(mode === "TAP" && allowTap ? customer ? [customer] : [] : eligible).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.email} · {item.wallet == null ? "Wallet unavailable" : `${item.wallet} BP`}</option>)}
+        {(mode === "TAP" && allowTap ? customer ? [customer] : [] : eligible).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.email} · {item.wallet == null ? "BP unavailable" : `${item.wallet} BP`} · {item.customizedBalance || 0} CBP here</option>)}
       </select>
     </Field>
-    {mode === "TAP" && customer && <p role="status" className="rounded-lg border border-[#F5C400]/30 bg-[#F5C400]/5 p-3 text-sm text-[#F5C400]">{customer.name} · {customer.email}<br />Available: {customer.wallet ?? 0} BP. Confirm below to pay.</p>}
+    {mode === "TAP" && customer && <p role="status" className="rounded-lg border border-[#F5C400]/30 bg-[#F5C400]/5 p-3 text-sm text-[#F5C400]">{customer.name} · {customer.email}<br />Available: {customer.wallet ?? 0} shared BP · {customer.customizedBalance || 0} CBP at this business. Confirm below to pay.</p>}
     {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
   </div>
 }

@@ -14,7 +14,7 @@ test("cash and BP totals exclude loads and pending sales and subtract refunds in
   ])
   assert.deepEqual(summarizeFinance(audit), {
     cashSales: 49.5, bpSales: 100, cashRefunds: 10, bpRefunds: 25,
-    cashNet: 39.5, bpNet: 75, salesCount: 2, cashCount: 1, bpCount: 1,
+    cashNet: 39.5, bpNet: 75, cbpSales:0, cbpRefunds:0, cbpNet:0, cbpCount:0, salesCount: 2, cashCount: 1, bpCount: 1,
   })
   assert.equal(audit.find((item) => item.id === "cash").unit, "cash")
   assert.equal(audit.find((item) => item.id === "refund-cash").unit, "cash")
@@ -46,4 +46,10 @@ test("cash refunds retain their unit when the original sale is outside a report 
 
 test("cash cents are summed without floating point drift", () => {
   assert.equal(summarizeFinance(financialAudit([sale("one", "CASH_PURCHASE", 0.1), sale("two", "CASH_PURCHASE", 0.2)])).cashNet, 0.3)
+})
+
+test("business-only CBP redemptions never inflate shared BP collections",()=>{
+  const summary=summarizeFinance(financialAudit([sale('cbp','CUSTOMIZED_PURCHASE',10),sale('cbp-refund','CUSTOMIZED_REFUND',3)]))
+  assert.equal(summary.cbpNet,7)
+  assert.equal(summary.bpNet,0)
 })

@@ -21,6 +21,7 @@ function Reports() {
   const {
     transactions,
     financeAudit,
+    rebateLedger,
     customers,
     inventoryMovements,
     workstationSessions,
@@ -37,6 +38,9 @@ function Reports() {
   const completedTransactions = periodTransactions.filter(isCompleted)
   const periodAudit = financeAudit.filter((item) => inPeriod(item.created_at))
   const finance = summarizeFinance(periodAudit)
+  const periodRebates = rebateLedger.filter((item)=>inPeriod(item.created_at))
+  const rebatesIssued = periodRebates.filter((item)=>item.kind === "EARN").reduce((sum,item)=>sum+Number(item.amount),0)
+  const rebatesReversed = periodRebates.filter((item)=>item.kind === "REVERSAL").reduce((sum,item)=>sum+Number(item.amount),0)
   const customerPurchases = periodAudit.filter((item) => isSale(item) && (isCompleted(item) || item.status === "REFUNDED"))
   const salesAudit = periodAudit.filter((item) => (isSale(item) || isRefund(item)) && (isCompleted(item) || (isSale(item) && item.status === "REFUNDED")))
   const newCustomers = customers.filter((item) => inPeriod(item.created_at)).length
@@ -68,6 +72,7 @@ function Reports() {
         : bucketStart.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
       cash: 0,
       bp: 0,
+      cbp: 0,
     }
   })
   customerPurchases.forEach((item) => {
@@ -78,7 +83,7 @@ function Reports() {
         bucketCount - 1,
         Math.floor(((date.getTime() - start.getTime()) / interval) * bucketCount),
       )
-    if (index >= 0) buckets[index][item.paymentMethod === "CASH" ? "cash" : "bp"] += Number(item.amount || 0)
+    if (index >= 0) buckets[index][item.paymentMethod === "CASH" ? "cash" : item.paymentMethod === "CUSTOMIZED" ? "cbp" : "bp"] += Number(item.amount || 0)
   })
   const reportRows = [
     ["Cash sales (cash)", finance.cashSales],
@@ -87,6 +92,11 @@ function Reports() {
     ["BuzzPoints sales (BP)", finance.bpSales],
     ["BuzzPoints refunds (BP)", finance.bpRefunds],
     ["Net BuzzPoints sales (BP)", finance.bpNet],
+    ["Customized BP redeemed (CBP)",finance.cbpSales],
+    ["Customized BP refunds (CBP)",finance.cbpRefunds],
+    ["Net Customized BP redemptions (CBP)",finance.cbpNet],
+    ["Rebates issued (CBP)",rebatesIssued],
+    ["Rebates reversed (CBP)",rebatesReversed],
     ["Completed sales (cash and BP)", finance.salesCount],
     ["New customers", newCustomers],
     ["Completed transactions", completedTransactions.length],
@@ -99,8 +109,8 @@ function Reports() {
       ["Metric", "Value"],
       ...reportRows,
       [],
-      ["Period bucket", "Cash sales (cash)", "BuzzPoints sales (BP)"],
-      ...buckets.map((item) => [item.label, item.cash, item.bp]),
+      ["Period bucket", "Cash sales (cash)", "BuzzPoints sales (BP)", "Customized BP redemptions (CBP)"],
+      ...buckets.map((item) => [item.label, item.cash, item.bp, item.cbp]),
       [],
       ["Record ID", "Source", "Type", "Payment method", "Amount", "Unit", "Customer", "Product ID", "Quantity", "Workstation", "Operator", "Date", "Original transaction"],
       ...salesAudit.map((item) => [item.id, item.source, item.type, item.paymentMethod, item.amount, item.unit,
@@ -142,6 +152,7 @@ function Reports() {
         ))}
       </div>
       <FinanceSummary summary={finance} loading={dataLoading} title={`Business sales audit · ${period}`} />
+      <div className={`${cardClass} mb-5`}><h2 className="font-semibold text-white">Business-only rebate activity · {period}</h2><p className="mt-2 text-sm text-[#AAA]">{rebatesIssued} CBP issued · {rebatesReversed} CBP reversed after refunds. These rewards do not add to shared BP collections or settlement amounts.</p></div>
       <div className="grid gap-4 sm:grid-cols-2">
         {[
           ["New customers", String(newCustomers)],
@@ -157,7 +168,7 @@ function Reports() {
       <section className={`${cardClass} mt-6`}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Cash and BuzzPoints sales</h2>
+            <h2 className="text-lg font-semibold text-white">Cash, BP and CBP activity</h2>
             <p className="mt-1 text-sm text-[#666]">{period} gross sales in their original payment units</p>
           </div>
           <TrendingUp className="text-[#F5C400]" />
@@ -165,7 +176,7 @@ function Reports() {
         <SalesChart buckets={buckets} label={`${period} cash and BuzzPoints sales chart`} />
       </section>
       <section className={`${cardClass} mt-6`}>
-        <h2 className="text-lg font-semibold text-white">Combined cash and BuzzPoints audit</h2>
+        <h2 className="text-lg font-semibold text-white">Combined cash, BP and CBP audit</h2>
         <p className="mt-1 text-sm text-[#777]">Sales and refunds for {period}. Export CSV includes every record in this period.</p>
         <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm">
           <thead className="border-b border-[#292929] text-xs text-[#777]"><tr>{["Reference", "Customer", "Type", "Payment", "Amount", "Operator", "Date"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead>
