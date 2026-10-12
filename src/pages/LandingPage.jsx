@@ -38,7 +38,7 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
   const need = needs.find((item) => item.id === selectedNeed)
-  const links = [["Find your tools", "solutions"], ["Features", "features"], ["Getting started", "how-it-works"], ["FAQ", "faq"]]
+  const links = [["Find your tools", "solutions"], ["Features", "features"], ["Community", "community"], ["Getting started", "how-it-works"], ["FAQ", "faq"]]
 
   return <main className="min-h-screen overflow-x-hidden bg-[#080b10] text-white">
     <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-[#FFD400] focus:p-3 focus:text-black">Skip to content</a>
@@ -73,6 +73,33 @@ export default function LandingPage() {
 
       <section className={`${panel} grid gap-8 p-6 sm:p-10 lg:grid-cols-2`}><div><p className="text-xs font-semibold uppercase tracking-wider text-[#FFD400]">Two ways to pay</p><h2 className="mt-4 text-3xl font-semibold tracking-tight">Serve the customer.<br />Record the right payment.</h2><p className="mt-4 leading-7 text-[#aeb9c8]">Cash and BuzzPoints are both part of your business activity. Each keeps its own amount, payment record, and report totals.</p></div><div className="space-y-4"><div className="rounded-2xl bg-emerald-400/5 p-5"><h3 className="font-semibold text-emerald-300">Cash customers</h3><p className="mt-2 text-sm leading-6 text-[#c8ced8]">Sell products to local customers or start guest workstation sessions. Record the cash amount without changing BP wallet balances.</p></div><div className="rounded-2xl bg-[#FFD400]/5 p-5"><h3 className="font-semibold text-[#FFD400]">BuzzTap account customers</h3><p className="mt-2 text-sm leading-6 text-[#c8ced8]">Register an eligible linked account and accept shared BP for products or workstation time. Review payments and verified BP refunds in Transactions.</p></div></div></section>
 
+      <section id="community" className="scroll-mt-32 py-16 lg:py-20">
+        <div className="grid items-center gap-10 lg:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#FFD400]">The BuzzTap environment</p>
+            <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-[-0.035em] sm:text-4xl">A place for businesses and customers to connect.</h2>
+            <p className="mt-5 text-base leading-8 text-[#aeb9c8]">Your business has more to share than a transaction. Bring promotions, announcements, and everyday updates into the BuzzTap community, where customers can discover what’s happening.</p>
+            <ul className="mt-6 space-y-4">
+              {[
+                ["For businesses", "Create posts with media, promotion dates, and a clear next step. Submit them for Admin review and track their publication status."],
+                ["For customers", "Discover published promotions and updates from businesses in the BuzzTap environment, and find a reason to visit again."],
+                ["A shared community feed", "Bring business news and Admin announcements together. Published posts appear during their scheduled dates."]
+              ].map(([title, text]) => <li key={title} className="flex items-start gap-3"><Check size={18} className="mt-1 shrink-0 text-[#FFD400]" /><div><h3 className="text-sm font-semibold text-white">{title}</h3><p className="mt-1 text-sm leading-7 text-[#aeb9c8]">{text}</p></div></li>)}
+            </ul>
+            <a href="/login" className={`${secondary} mt-7`}>Sign in to manage your business posts <ArrowRight size={16} /></a>
+          </div>
+          <div className={`${panel} p-5 sm:p-7`} aria-label="Illustrative BuzzTap community feed">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5"><div className="flex items-center gap-3"><Megaphone size={22} className="text-[#FFD400]" /><div><p className="font-semibold">BuzzTap community</p><p className="mt-1 text-xs text-[#98a3b3]">Promotions · Announcements · Updates</p></div></div><span className="rounded-full border border-white/15 px-3 py-1 text-[10px] uppercase tracking-wider text-[#a8b3c2]">Example posts</span></div>
+            <div className="mt-5 space-y-4">
+              {[
+                { name: "Neighborhood Café", letter: "C", type: "Promotion", title: "Something new for your next coffee break.", text: "Share a seasonal offer, product photo, and the dates customers can enjoy it.", icon: Package },
+                { name: "Local Gaming Space", letter: "G", type: "Business update", title: "Let your customers know what’s new.", text: "Announce new workstations, updated opening hours, or an upcoming event.", icon: Monitor },
+              ].map(({ name, letter, type, title, text, icon: Icon }) => <article key={name} className="rounded-2xl border border-white/10 bg-white/[0.025] p-5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFD400]/15 text-sm font-bold text-[#FFD400]">{letter}</span><div><p className="text-sm font-semibold">{name}</p><p className="text-xs text-[#98a3b3]">Illustrative business</p></div><Icon size={19} className="ml-auto shrink-0 text-[#FFD400]" /></div><p className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-[#FFD400]">{type}</p><h3 className="mt-2 text-lg font-semibold">{title}</h3><p className="mt-2 text-sm leading-7 text-[#aeb9c8]">{text}</p></article>)}
+            </div>
+            <p className="mt-5 text-xs leading-6 text-[#98a3b3]">Examples show how businesses can use posts. Actual feed content depends on approved, published updates.</p>
+          </div>
+        </div>
+      </section>
       <section id="how-it-works" className="scroll-mt-32 py-16 lg:py-20"><SectionHeading eyebrow="Getting started" title="Set up once. Build a daily routine." /><ol className="mt-8 grid gap-5 md:grid-cols-3">{[["Create your business", "Open the registration page, choose a plan, and enter your business details. Confirm your email if requested, then sign in."], ["Prepare your workspace", "Add your catalog and opening stock, configure workstations and rates, register customers, and assign your team’s roles."], ["Sell, serve, and review", "Record payments, manage sessions, and use the dashboard, transaction history, and reports to review the day’s activity."]].map(([title, text], index) => <li key={title} className={`${panel} p-6`}><span className="text-3xl font-semibold text-[#FFD400]/70">0{index + 1}</span><h3 className="mt-5 text-xl font-semibold">{title}</h3><p className="mt-3 text-sm leading-7 text-[#aeb9c8]">{text}</p></li>)}</ol><div className="mt-8 flex flex-wrap items-center gap-4"><a href="/subscribe" className={primary}>View plans & register <ArrowRight size={16} /></a><p className="text-sm text-[#a8b3c2]">Already have a business account? <a href="/login" className="font-semibold text-white underline underline-offset-4">Sign in</a></p></div></section>
 
       <section id="faq" className="scroll-mt-32 border-t border-white/10 py-16"><SectionHeading eyebrow="Useful answers" title="Know what to expect." /><div className="mt-8 max-w-4xl space-y-3">{faqs.map((item, index) => <div key={item.question} className={`${panel} overflow-hidden`}><h3><button type="button" id={`faq-question-${index}`} aria-expanded={openFaq === index} aria-controls={`faq-answer-${index}`} onClick={() => setOpenFaq(openFaq === index ? -1 : index)} className="flex w-full items-center justify-between gap-5 p-5 text-left font-medium focus-visible:outline-2 focus-visible:outline-[#FFD400]"><span>{item.question}</span><ChevronDown size={18} className={`shrink-0 text-[#FFD400] transition-transform ${openFaq === index ? "rotate-180" : ""}`} /></button></h3><div id={`faq-answer-${index}`} role="region" aria-labelledby={`faq-question-${index}`} hidden={openFaq !== index} className="px-5 pb-5 text-sm leading-7 text-[#aeb9c8]">{item.answer}</div></div>)}</div></section>

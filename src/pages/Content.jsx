@@ -9,6 +9,7 @@ import {
   Send,
 } from "lucide-react"
 import { useBusiness } from "../businessContext"
+import BusinessProfile from "../components/BusinessProfile"
 import { Button, Field, PageHeader, cardClass, inputClass } from "../components/BusinessUI"
 import { supabase } from "../lib/supabaseClient"
 import { communityPost, isRunningPost } from "../lib/communityFeed"
@@ -115,7 +116,7 @@ function FeedMedia({ url, title }) {
 }
 
 function Content() {
-  const { activities = [], dataLoading, dataError, addActivity, business } = useBusiness()
+  const { activities = [], dataLoading, dataError, addActivity, business, businessRole } = useBusiness()
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("WORKING")
   const [feedMode, setFeedMode] = useState("MINE")
@@ -389,6 +390,7 @@ function Content() {
         </select>
       </div>
 
+      {business && <BusinessProfile key={business.id} business={business} role={businessRole} />}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(330px,1.3fr)_minmax(400px,0.95fr)_minmax(340px,1fr)]">
         <section className={`${cardClass} overflow-hidden p-0`} aria-label="Drafts and submissions">
           <header className="border-b border-[#252525] px-4 py-4 sm:px-5">
