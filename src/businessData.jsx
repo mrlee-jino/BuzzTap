@@ -5,6 +5,7 @@ import { BusinessContext } from "./businessContext"
 import { useAuth } from "./context/useAuth"
 import { nextProductId } from "./lib/catalog"
 import { financialAudit, summarizeFinance } from "./lib/businessFinance"
+import PurchaseReceipt from "./components/PurchaseReceipt"
 
 const emptyWallet = { purchased: 0, distributed: 0, collected: 0, pendingSettlement: 0, settled: 0, balance: 0 }
 const defaultNotifications = {
@@ -56,6 +57,7 @@ export function BusinessProvider({ children, selectedMembership }) {
   const [wallet, setWallet] = useState(emptyWallet)
   const [dataLoading, setDataLoading] = useState(false)
   const [dataError, setDataError] = useState(null)
+  const [receiptRequest, setReceiptRequest] = useState(null)
 
   const activeMemberships = useMemo(
     () => (memberships || []).filter((item) => item.status === "ACTIVE" && item.businesses),
@@ -281,6 +283,7 @@ export function BusinessProvider({ children, selectedMembership }) {
     })
     if (error) return { success: false, error: error.message }
     await loadData()
+    setReceiptRequest({ kind: "TRANSFER", id: data, autoPrint: true })
     return { success: true, id: data }
   }
   const checkoutProduct = async (details) => {
@@ -294,6 +297,7 @@ export function BusinessProvider({ children, selectedMembership }) {
     if (error) return { success: false, error: error.message }
     const { data: receipt } = await supabase.from("business_transactions").select("amount,metadata").eq("business_id", business.id).eq("id", id).maybeSingle()
     await loadData()
+    setReceiptRequest({ kind: "TRANSACTION", id, autoPrint: true })
     return { success: true, id, receipt }
   }
   const refund = async (item) => {
@@ -430,7 +434,7 @@ export function BusinessProvider({ children, selectedMembership }) {
   }
   const changeWorkstationSession = async (workstationId, action, details = {}) => {
     if (!business?.id) return { success: false, error: "No active business is available." }
-    const { error } = await supabase.rpc(
+    const { data: sessionId, error } = await supabase.rpc(
       action === "START" ? "start_timed_workstation_session" : "end_workstation_session",
       { p_business_id: business.id, p_workstation_id: workstationId,
         ...(action === "START" ? { p_customer_id: details.customerId || null, p_guest_name: details.guestName || null, p_payment_method: details.paymentMethod, p_amount: details.amount, p_request_id: details.requestId, p_duration_minutes: details.durationMinutes ?? null } : {}),
@@ -441,6 +445,7 @@ export function BusinessProvider({ children, selectedMembership }) {
       return { success: false, error: error.message }
     }
     await loadData()
+    if (action === "START") setReceiptRequest({ kind: "SESSION", id: sessionId, autoPrint: true })
     return { success: true }
   }
   const issueInventory = async (productId, quantity, note) => {
@@ -481,13 +486,14 @@ export function BusinessProvider({ children, selectedMembership }) {
     <BusinessContext.Provider value={{
       user, profile, memberships, activeMemberships, currentMembership, business, businessRole,
       isAuthenticated, authLoading, authError, dataLoading, dataError, refreshBusinessData: loadData,
-      ...data, wallet, finance, financeAudit, authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
+      ...data, wallet, finance, financeAudit, showReceipt: (id) => setReceiptRequest({ kind: "TRANSACTION", id, autoPrint: false }), authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
       updateCustomerStatus, addCard, assignCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, updateProductType, deleteProduct,
       addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, deleteStaff, purchaseInventory,
       requestPurchase, requestSettlement, saveBusinessSettings, changeWorkstationSession,
       issueInventory, restockInventory,
     }}>
       {children}
+      {receiptRequest && business && <PurchaseReceipt key={`${business.id}-${receiptRequest.kind}-${receiptRequest.id}`} request={receiptRequest} onClose={() => setReceiptRequest(null)} />}
     </BusinessContext.Provider>
   )
 }

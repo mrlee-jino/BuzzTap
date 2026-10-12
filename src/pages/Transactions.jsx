@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Eye, Receipt, RotateCcw, Search } from "lucide-react"
+import { Eye, Printer, Receipt, RotateCcw, Search } from "lucide-react"
 import { useBusiness } from "../businessContext"
 import { Button, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 import FinanceSummary from "../components/FinanceSummary"
@@ -8,7 +8,7 @@ import { paymentMethod, formatAmount, isRefund, summarizeFinance } from "../lib/
 const statuses = ["ALL", "COMPLETED", "PENDING", "FAILED", "REFUNDED"]
 
 function Transactions() {
-  const { transactions, refund, dataLoading, dataError } = useBusiness()
+  const { transactions, refund, showReceipt, dataLoading, dataError } = useBusiness()
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("ALL")
   const [method, setMethod] = useState("ALL")
@@ -87,6 +87,7 @@ function Transactions() {
                   <td className="px-5 py-4">
                     <div className="flex gap-1">
                       <button title="View details" onClick={() => setSelectedTransaction(item)} className="rounded-lg p-2 text-[#666] hover:bg-[#222] hover:text-white"><Eye size={16} /></button>
+                      {["CUSTOMER_PURCHASE", "CASH_PURCHASE"].includes(item.type) && item.status === "COMPLETED" && <button title="Print receipt" aria-label={`Print receipt ${item.id}`} onClick={() => showReceipt(item.id)} className="rounded-lg p-2 text-[#666] hover:bg-[#222] hover:text-white"><Printer size={16} /></button>}
                       {item.type === "CUSTOMER_PURCHASE" && item.status === "COMPLETED" && item.metadata?.shared_transfer_id && (
                         <button title="Refund shared BP payment" disabled={refundingId === item.id} onClick={() => doRefund(item)} className="rounded-lg p-2 text-[#666] hover:bg-[#F5C400] hover:text-black disabled:opacity-50"><RotateCcw size={16} /></button>
                       )}

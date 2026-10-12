@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+@media print {
+  @page { margin: 8mm; }
+  body > *:not(.purchase-receipt-overlay) { display: none !important; }
+  .purchase-receipt-overlay { position: static !important; display: block !important; padding: 0 !important; background: white !important; }
+  .purchase-receipt-container { width: 72mm !important; max-width: 100% !important; max-height: none !important; overflow: visible !important; padding: 0 !important; margin: 0 auto !important; box-shadow: none !important; border-radius: 0 !important; }
+  .receipt-controls { display: none !important; }
+  .purchase-receipt { color: black !important; background: white !important; }
+}
+
 :root {
   color: #ffffff;
   background: #07090d;
