@@ -1,5 +1,6 @@
 import {
   BrowserRouter,
+  Link,
   Routes,
   Route,
   Navigate,
@@ -7,7 +8,7 @@ import {
   useNavigate,
 } from "react-router-dom"
 import { useMemo, useState } from "react"
-import { Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 
 import Sidebar from "./components/Sidebar"
 import BusinessNotifications from "./components/BusinessNotifications"
@@ -598,8 +599,9 @@ function Login({ signIn, onLogin }) {
         onSubmit={handleSubmit}
         className="w-full max-w-md rounded-2xl border border-[#242424] bg-[#111] p-8 shadow-2xl"
       >
-        <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F5C400] text-xl font-black text-black">
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F5C400] text-xl font-black text-black">
             B
           </div>
 
@@ -612,6 +614,10 @@ function Login({ signIn, onLogin }) {
               Business Management
             </p>
           </div>
+          </div>
+          <Link to="/welcome" aria-label="Go back to landing page" className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#333] px-3 py-2 text-sm text-[#AAA] transition hover:border-[#F5C400] hover:text-[#F5C400] focus-visible:outline-2 focus-visible:outline-[#F5C400]">
+            <ArrowLeft size={16} />Go back
+          </Link>
         </div>
 
         <p className="mb-2 text-sm font-medium text-[#F5C400]">
