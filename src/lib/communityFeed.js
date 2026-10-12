@@ -4,7 +4,7 @@ export function isRunningPost(item, date) {
     && (!(item.endDate || item.end_date) || (item.endDate || item.end_date) >= date)
 }
 
-export function communityPost(item, names) {
+export function communityPost(item, names, logos = new Map()) {
   return {
     ...item,
     description: item.content || item.description || "",
@@ -13,5 +13,6 @@ export function communityPost(item, names) {
     mediaUrl: item.media_url || "",
     callToAction: item.call_to_action || "",
     businessName: item.business_id == null ? "BuzzTap Admin" : names.get(item.business_id) || "BuzzTap Business",
+    businessLogo: item.business_id == null ? "" : logos.get(item.business_id) || "",
   }
 }

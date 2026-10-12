@@ -23,3 +23,11 @@ test("saved post mapping preserves dates, content precedence and safe names", ()
   assert.equal(communityPost({ ...row, business_id: "other" }, new Map()).businessName, "BuzzTap Business")
   assert.equal(communityPost({ ...row, business_id: "other" }, new Map([["other", "Shop"]])).businessName, "Shop")
 })
+
+test("all posts from a business reuse its saved logo URL", () => {
+  const names = new Map([["shop", "Shop"]])
+  const logos = new Map([["shop", "https://example.test/logo.png"]])
+  assert.equal(communityPost({ id: "one", business_id: "shop" }, names, logos).businessLogo, logos.get("shop"))
+  assert.equal(communityPost({ id: "two", business_id: "shop" }, names, logos).businessLogo, logos.get("shop"))
+  assert.equal(communityPost({ business_id: null }, names, logos).businessLogo, "")
+})

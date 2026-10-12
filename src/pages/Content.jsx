@@ -115,9 +115,19 @@ function FeedMedia({ url, title }) {
   )
 }
 
+function BusinessAvatar({ name, logo }) {
+  const [failed, setFailed] = useState(false)
+  const url = safeMediaUrl(logo)
+  return <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F5C400] text-xs font-black text-black">
+    {url && !failed ? <img src={url} alt={`${name || "Business"} logo`} loading="lazy" className="h-full w-full object-cover" onError={() => setFailed(true)} /> : name?.trim()?.slice(0, 1)?.toUpperCase() || "B"}
+  </div>
+}
+
 function Content() {
   const { activities = [], dataLoading, dataError, addActivity, business, businessRole } = useBusiness()
   const [query, setQuery] = useState("")
+  const [businessProfile, setBusinessProfile] = useState(null)
+  const ownProfile = businessProfile?.business_id === business?.id ? businessProfile : null
   const [statusFilter, setStatusFilter] = useState("WORKING")
   const [feedMode, setFeedMode] = useState("MINE")
   const [myPostsMode, setMyPostsMode] = useState("RUNNING")
@@ -195,11 +205,12 @@ function Content() {
         if (!error) {
           const ids = [...new Set((data || []).map((item) => item.business_id).filter(Boolean))]
           const nameResult = ids.length
-            ? await supabase.rpc("get_community_business_names", { p_business_ids: ids })
+            ? await supabase.rpc("get_community_business_identities", { p_business_ids: ids })
             : { data: [], error: null }
           if (nameResult.error) throw new Error(`Business names could not be loaded: ${nameResult.error.message}`)
           const names = new Map((nameResult.data || []).map((item) => [item.id, item.name]))
-          data = (data || []).map((item) => communityPost(item, names))
+          const logos = new Map((nameResult.data || []).map((item) => [item.id, item.logo_url]))
+          data = (data || []).map((item) => communityPost(item, names, logos))
         }
       } catch (requestError) {
         if (cancelled) return
@@ -390,7 +401,7 @@ function Content() {
         </select>
       </div>
 
-      {business && <BusinessProfile key={business.id} business={business} role={businessRole} />}
+      {business && <BusinessProfile key={business.id} business={business} role={businessRole} onProfileChange={setBusinessProfile} />}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(330px,1.3fr)_minmax(400px,0.95fr)_minmax(340px,1fr)]">
         <section className={`${cardClass} overflow-hidden p-0`} aria-label="Drafts and submissions">
           <header className="border-b border-[#252525] px-4 py-4 sm:px-5">
@@ -495,11 +506,9 @@ function Content() {
                     </div>
                   )}
                   <div className="flex items-center gap-2.5 p-3 pb-2">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F5C400] text-xs font-black text-black">
-                      {(feedMode === "MINE" ? business?.name : item.businessName || (item.business_id === business?.id ? business?.name : ""))?.trim()?.slice(0, 1)?.toUpperCase() || "B"}
-                    </div>
+                    <BusinessAvatar key={(feedMode === "MINE" ? ownProfile?.logo_url : item.businessLogo) || "initial"} name={feedMode === "MINE" ? ownProfile?.display_name || business?.name : item.businessName} logo={feedMode === "MINE" ? ownProfile?.logo_url : item.businessLogo} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-[#111827]">{feedMode === "MINE" ? business?.name || "Your business" : item.businessName || (item.business_id === business?.id ? business?.name : "") || "BuzzTap Community"}</p>
+                      <p className="truncate text-xs font-semibold text-[#111827]">{feedMode === "MINE" ? ownProfile?.display_name || business?.name || "Your business" : item.businessName || (item.business_id === business?.id ? business?.name : "") || "BuzzTap Community"}</p>
                       <p className="text-[10px] text-[#6b7280]">{formatDate(item.created_at?.slice(0, 10) || item.startDate)} | {statusLabel(item.viewStatus || contentStatus(item))}</p>
                     </div>
                     <div className="relative">
