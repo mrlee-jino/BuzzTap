@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { Package, Plus, Minus } from "lucide-react"
 import { useBusiness } from "../businessContext"
+import PaymentCustomer from "../components/PaymentCustomer"
 import FinanceSummary from "../components/FinanceSummary"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 export default function StaffPurchase() {
-  const { products, customers, finance, inventoryMovements, checkoutProduct, dataLoading, dataError } = useBusiness()
+  const { products, finance, inventoryMovements, checkoutProduct, dataLoading, dataError } = useBusiness()
   const [selected, setSelected] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [notice, setNotice] = useState("")
@@ -120,9 +121,9 @@ export default function StaffPurchase() {
 
       {checkout && <Modal title={`Purchase · ${checkout.name}`} onClose={() => { if (!submitting) setCheckout(null) }}><form onSubmit={pay} className="space-y-4" onChange={changeRequest}>
         <p className="text-sm text-[#AAA]">{checkout.quantity} units · {checkout.price * checkout.quantity} BP</p>
-        <Field label="Customer type"><select className={inputClass} value={customerType} disabled={submitting} onChange={(event) => { setCustomerType(event.target.value); setPaymentMethod("CASH") }}><option value="ACCOUNT">BuzzTap account customer</option><option value="LOCAL">Local customer (no BuzzTap account)</option></select></Field>
-        {customerType === "ACCOUNT" ? <Field label="Customer account"><select className={inputClass} name="customerId" required defaultValue="" disabled={submitting}><option value="" disabled>Select customer</option>{customers.filter((item) => item.status === "ACTIVE" && item.profileStatus === "ACTIVE" && item.profile_id).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.email} · {item.wallet ?? 0} BP</option>)}</select><p className="mt-2 text-xs text-[#AAA]">Register the account on the Customers page if it is not listed.</p></Field> : <Field label="Customer name"><input className={inputClass} name="guestName" required maxLength={160} disabled={submitting} placeholder="Local customer name" /></Field>}
         <Field label="Payment method"><select className={inputClass} value={paymentMethod} disabled={submitting} onChange={(event) => setPaymentMethod(event.target.value)}><option value="CASH">Cash</option>{customerType === "ACCOUNT" && <option value="BUZZPOINTS">BuzzPoints</option>}</select></Field>
+        <Field label="Customer type"><select className={inputClass} value={customerType} disabled={submitting} onChange={(event) => { setCustomerType(event.target.value); setPaymentMethod("CASH") }}><option value="ACCOUNT">BuzzTap account customer</option><option value="LOCAL">Local customer (no BuzzTap account)</option></select></Field>
+        {customerType === "ACCOUNT" ? <PaymentCustomer key={paymentMethod} allowTap={paymentMethod === "BUZZPOINTS"} disabled={submitting} onChange={changeRequest} /> : <Field label="Customer name"><input className={inputClass} name="guestName" required maxLength={160} disabled={submitting} placeholder="Local customer name" /></Field>}
         {paymentMethod === "CASH" ? <Field label="Total cash sale amount"><input className={inputClass} name="cashAmount" type="number" min="0.01" step="0.01" required disabled={submitting} placeholder="Enter total cash amount" /><p className="mt-2 text-xs text-[#AAA]">Enter the cash price for all selected units. The catalog price is in BP.</p></Field> : <p className="text-sm text-[#AAA]">{checkout.price * checkout.quantity} BP will be deducted from the customer's shared wallet.</p>}
         {customerType === "LOCAL" && <p className="text-xs text-[#AAA]">Local customers can pay with cash only.</p>}
         {checkoutError && <p role="alert" className="text-sm text-red-300">{checkoutError}</p>}

@@ -3,6 +3,7 @@ import { Building2, MapPin, Clock, Phone, Mail } from "lucide-react"
 import { supabase } from "../lib/supabaseClient"
 import { Button, Field, cardClass, inputClass } from "./BusinessUI"
 import { PROFILE_IMAGE_BUCKET, PROFILE_IMAGE_TYPES, validateProfileImage } from "../lib/profileImages"
+import { PROFILE_COLORS, profileTheme } from "../lib/profileTheme"
 
 const fields = [
   ["display_name", "Business display name"], ["business_type", "Business category"],
@@ -19,6 +20,7 @@ export default function BusinessProfile({ business, role, onProfileChange }) {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const canEdit = ["OWNER", "MANAGER"].includes(role)
+  const theme = profileTheme(profile.theme_color)
   useEffect(() => {
     let cancelled = false
     supabase.rpc("get_public_business_profile", { p_business_id: business.id }).then(({ data, error: failure }) => {
@@ -71,18 +73,27 @@ export default function BusinessProfile({ business, role, onProfileChange }) {
           <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={loading || saving || !!uploading || !canEdit} onChange={(event) => uploadImage(event, key)} className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-[#F5C400] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-black disabled:opacity-50`} />
           <span className="mt-2 block text-xs text-[#888]">{uploading === key ? "Uploading image..." : "JPG, PNG, WebP, or GIF · maximum 10 MB per image"}</span>
         </Field>)}</div>
+        <fieldset className="rounded-xl border border-[#292929] p-4" disabled={loading || saving || !canEdit}>
+          <legend className="px-2 text-xs uppercase tracking-wider text-[#888]">Profile theme color</legend>
+          <div className="flex flex-wrap items-center gap-3">
+            {PROFILE_COLORS.map(([name, color]) => <button key={color} type="button" aria-label={`${name} theme`} aria-pressed={theme.color === color} title={name} onClick={() => update("theme_color", color)} className="h-9 w-9 rounded-full border-2 disabled:opacity-50" style={{ backgroundColor: color, borderColor: theme.color === color ? "white" : "transparent", outline: theme.color === color ? `2px solid ${color}` : undefined, outlineOffset: 2 }} />)}
+            <label className="flex items-center gap-2 text-sm text-[#AAA]">Custom color<input type="color" value={theme.color} onChange={(event) => update("theme_color", event.target.value.toUpperCase())} className="h-9 w-12 cursor-pointer rounded border border-[#444] bg-transparent" /></label>
+            <span className="text-xs text-[#888]">{theme.color}</span>
+          </div>
+          <p className="mt-3 text-xs text-[#888]">Applies to your profile accents, logo background, and website button. Save to publish the color.</p>
+        </fieldset>
         <div className="grid gap-4 sm:grid-cols-2">{fields.map(([key, label]) => <Field key={key} label={label}><input className={inputClass} value={profile[key] || ""} disabled={loading || saving || !canEdit} required={key === "display_name"} maxLength={500} type={key.endsWith("url") || key === "website" ? "url" : key === "email" ? "email" : "text"} onChange={(event) => update(key, event.target.value)} placeholder={key.endsWith("url") || key === "website" ? "https://..." : label} /></Field>)}</div>
         <Field label="About your business"><textarea className={inputClass} rows={3} maxLength={2000} value={profile.about || ""} disabled={loading || saving || !canEdit} onChange={(event) => update("about", event.target.value)} placeholder="Tell customers what you offer and what makes your business special." /></Field>
         {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
         {notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
         {canEdit && <Button type="submit" disabled={saving || loading || !!uploading}>{loading ? "Loading profile..." : uploading ? "Uploading image..." : saving ? "Saving..." : "Save Business Profile"}</Button>}
       </form>
-      <div><p className="mb-3 text-xs text-[#888]">Customer profile preview · changes appear after saving</p><article className="overflow-hidden rounded-2xl border border-[#ddd] bg-white text-[#172033]">
-        <div className="h-32 overflow-hidden bg-gradient-to-r from-[#F5C400]/40 to-[#F5C400]/10">{imageUrl(profile.cover_url) && <img key={profile.cover_url} src={imageUrl(profile.cover_url)} alt="Business cover" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} />}</div>
-        <div className="p-5"><div className="flex items-center gap-3"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#F5C400] text-black">{imageUrl(profile.logo_url) ? <img key={profile.logo_url} src={imageUrl(profile.logo_url)} alt="Business logo" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /> : <Building2 size={25} />}</div><div><h3 className="break-words text-xl font-bold">{profile.display_name || business.name}</h3><p className="text-xs text-[#6b7280]">{profile.business_type || "Business"}</p></div></div>
+      <div><p className="mb-3 text-xs text-[#888]">Customer profile preview · changes appear after saving</p><article className="overflow-hidden rounded-2xl border bg-white text-[#172033]" style={{ borderColor: `${theme.color}60`, borderTop: `4px solid ${theme.color}` }}>
+        <div className="h-32 overflow-hidden" style={{ background: `linear-gradient(to right, ${theme.color}60, ${theme.color}15)` }}>{imageUrl(profile.cover_url) && <img key={profile.cover_url} src={imageUrl(profile.cover_url)} alt="Business cover" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} />}</div>
+        <div className="p-5"><div className="flex items-center gap-3"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl" style={{ backgroundColor: theme.color, color: theme.foreground }}>{imageUrl(profile.logo_url) ? <img key={profile.logo_url} src={imageUrl(profile.logo_url)} alt="Business logo" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /> : <Building2 size={25} />}</div><div><h3 className="break-words text-xl font-bold">{profile.display_name || business.name}</h3><p className="text-xs" style={{ color: theme.onWhite }}>{profile.business_type || "Business"}</p></div></div>
           <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-[#4b5563]">{profile.about || "Add a description to introduce your business."}</p>
           <div className="mt-4 space-y-3 text-sm text-[#4b5563]">{[[MapPin,"address"],[Clock,"opening_hours"],[Phone,"phone"],[Mail,"email"]].map(([Icon,key]) => profile[key] && <p key={key} className="flex items-start gap-2"><Icon size={16} className="mt-0.5 shrink-0" /><span className="break-all">{profile[key]}</span></p>)}</div>
-          {imageUrl(profile.website) && <a href={imageUrl(profile.website)} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-sm font-semibold text-blue-600">Visit website</a>}
+          {imageUrl(profile.website) && <a href={imageUrl(profile.website)} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block rounded-lg px-4 py-2 text-sm font-semibold" style={{ backgroundColor: theme.color, color: theme.foreground }}>Visit website</a>}
           <div className="mt-5 border-t border-[#e5e7eb] pt-4 text-xs text-[#6b7280]">Promotions and updates appear in the business’s published posts.</div>
         </div>
       </article></div>

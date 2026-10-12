@@ -13,15 +13,24 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
       insert into businesses values('11111111-1111-1111-1111-111111111111','Test Shop','Cafe','ACTIVE','private@example.test');`);
     const migration = fs.readFileSync('supabase/migrations/20261013000002_business_public_profiles.sql','utf8');
     await db.exec(migration);
+    const themeMigration = fs.readFileSync('supabase/migrations/20261013000006_business_profile_theme_color.sql','utf8');
+    await db.exec(themeMigration);
     const bid = '11111111-1111-1111-1111-111111111111';
     const read = async () => (await db.query('select get_public_business_profile($1) as profile',[bid])).rows[0].profile;
     const save = async (profile) => (await db.query('select save_public_business_profile($1,$2::jsonb) as profile',[bid,JSON.stringify(profile)])).rows[0].profile;
     assert.equal((await read()).display_name,'Test Shop');
     assert.equal((await read()).email,undefined);
+    assert.equal((await read()).theme_color,'#F5C400');
     const profile = { display_name:'Public Shop',about:'Welcome',logo_url:'https://example.test/logo.png',website:'https://example.test',email:'public@example.test',business_id:'injected',status:'injected' };
     assert.equal((await save(profile)).business_id,bid);
     assert.equal((await read()).email,'public@example.test');
     assert.equal((await read()).status,undefined);
+    assert.equal((await save({...profile,theme_color:'#16a34a'})).theme_color,'#16A34A');
+    assert.equal((await read()).theme_color,'#16A34A');
+    await assert.rejects(save({...profile,theme_color:'red'}),/six-digit hex/);
+    await assert.rejects(save({...profile,theme_color:'#123'}),/six-digit hex/);
+    await assert.rejects(save({...profile,theme_color:42}),/must be text/);
+    assert.equal((await read()).theme_color,'#16A34A');
     await assert.rejects(save({...profile,logo_url:'javascript:alert(1)'}),/http or https/);
     await assert.rejects(save({...profile,about:'x'.repeat(2001)}),/too long/);
     await db.exec('create table content_items(business_id uuid,status text)');
@@ -38,6 +47,7 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
     await db.exec('update session_state set signed_in=false');
     await assert.rejects(read(),/Sign in/);
     await db.exec(migration);
+    await db.exec(themeMigration);
     console.log('Business public profile checks passed: persistence, public fields, protected edits, URL validation, repeat migration.');
   } finally { await db.close(); }
 })().catch((error) => { console.error(error); process.exitCode=1; });

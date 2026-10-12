@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { Package, Plus, Search, ToggleLeft, Trash2 } from "lucide-react"
 import { useBusiness } from "../businessContext"
+import PaymentCustomer from "../components/PaymentCustomer"
 import { catalogCategories } from "../lib/catalog"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 function ProductsServices() {
-  const { products, nextCatalogProductId, customers, purchase, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
+  const { products, nextCatalogProductId, purchase, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
   const [query, setQuery] = useState("")
   const [modal, setModal] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -130,7 +131,7 @@ function ProductsServices() {
         <Button type="submit" disabled={adding || dataLoading || !!dataError}>{adding ? "Adding..." : "Add Item"}</Button>
       </form></Modal>}
       {checkout && <Modal title={`Purchase · ${checkout.name}`} onClose={() => { if (!paying) setCheckout(null) }}><form onSubmit={pay} className="space-y-4">
-        <Field label="Customer"><select className={inputClass} name="customerId" required disabled={paying} defaultValue="" onChange={() => setPurchaseRequestId(crypto.randomUUID())}><option value="" disabled>Select customer</option>{customers.filter((customer) => customer.status === "ACTIVE" && customer.profileStatus === "ACTIVE" && customer.profile_id).map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.wallet ?? 0} BP</option>)}</select></Field>
+        <PaymentCustomer disabled={paying} onChange={() => setPurchaseRequestId(crypto.randomUUID())} />
         <Field label="Quantity"><input className={inputClass} name="quantity" type="number" required min="1" max={checkout.stock} step="1" defaultValue="1" disabled={paying} onChange={() => setPurchaseRequestId(crypto.randomUUID())} /></Field>
         <p className="text-sm text-[#AAA]">{checkout.price} BP per unit. Payment credits your business BP wallet.</p>
         {paymentError && <p role="alert" className="text-sm text-red-300">{paymentError}</p>}
