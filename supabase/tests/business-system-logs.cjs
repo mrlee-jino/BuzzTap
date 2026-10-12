@@ -1,0 +1,43 @@
+const fs=require('node:fs');
+const assert=require('node:assert/strict');
+const {PGlite}=require('../../.tmp/db-tools/node_modules/@electric-sql/pglite');
+(async()=>{
+ const db=new PGlite();
+ try {
+  await db.exec(`create schema auth; create role anon; create role authenticated;
+   create function auth.uid() returns uuid language sql as $$select 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid$$;
+   create table businesses(id uuid primary key,name text,status text);
+   create table profiles(id uuid primary key,full_name text,email text);
+   create table business_members(id uuid primary key default gen_random_uuid(),business_id uuid,user_id uuid,role text,status text);
+   create function user_has_business_role(bid uuid,roles text[]) returns boolean language sql security definer as $$select exists(select 1 from business_members where business_id=bid and user_id=auth.uid() and role=any(roles) and status='ACTIVE')$$;
+   create table business_access_logs(id uuid default gen_random_uuid(),business_id uuid,user_id uuid,event text,occurred_at timestamptz default now());
+   create table products_services(id text,business_id uuid,name text,stock integer,status text,password text);
+   create table product_inventory_movements(id uuid default gen_random_uuid(),business_id uuid,product_id text,movement_type text,quantity integer,created_by uuid,created_at timestamptz default now());
+   insert into businesses values('11111111-1111-1111-1111-111111111111','Test Shop','ACTIVE');
+   insert into profiles values(auth.uid(),'Owner','private@example.test');
+   insert into business_members(business_id,user_id,role,status) values('11111111-1111-1111-1111-111111111111',auth.uid(),'OWNER','ACTIVE');
+   insert into business_access_logs(business_id,user_id,event) values('11111111-1111-1111-1111-111111111111',auth.uid(),'LOGIN');`);
+  const migration=fs.readFileSync('supabase/migrations/20261013000009_business_system_logs.sql','utf8');
+  await db.exec(migration);
+  await db.exec(`insert into products_services values('PROD-001','11111111-1111-1111-1111-111111111111','Snack',10,'ACTIVE','do-not-record');
+   update products_services set stock=20;
+   insert into product_inventory_movements(business_id,product_id,movement_type,quantity,created_by) values('11111111-1111-1111-1111-111111111111','PROD-001','RESTOCK',10,auth.uid());
+   insert into business_access_logs(business_id,user_id,event) values('11111111-1111-1111-1111-111111111111',auth.uid(),'LOGOUT');`);
+  const logs=(await db.query('select * from business_system_logs')).rows;
+  assert.equal(logs.length,5);
+  assert.equal(logs.find(l=>l.action==='RESTOCK').actor_name,'Owner');
+  const update=logs.find(l=>l.action==='UPDATE');
+  assert.equal(update.details.before.stock,10); assert.equal(update.details.after.stock,20);
+  assert.ok(!JSON.stringify(logs).includes('do-not-record'));
+  await db.exec('update products_services set stock=20');
+  assert.equal(Number((await db.query('select count(*) as count from business_system_logs')).rows[0].count),5);
+  await db.exec(migration);
+  assert.equal(Number((await db.query('select count(*) as count from business_system_logs')).rows[0].count),5);
+  await db.exec('set role authenticated');
+  assert.equal((await db.query('select * from business_system_logs')).rows.length,5);
+  await assert.rejects(db.exec('delete from business_system_logs'),/permission denied/);
+  await db.exec("reset role; update business_members set role='STAFF'; set role authenticated");
+  assert.equal((await db.query('select * from business_system_logs')).rows.length,0);
+  console.log('System log checks passed: stock before/after, restock, access history, operator snapshot, private-field exclusion, no-op updates, repeat migration, and read/write restrictions.');
+ } finally {await db.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

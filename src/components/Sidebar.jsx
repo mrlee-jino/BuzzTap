@@ -9,14 +9,17 @@ import {
   BarChart3,
   Settings,
   WalletCards,
+  ClipboardList,
   ChevronRight,
   LogOut,
   Megaphone,
   ShoppingCart,
 } from "lucide-react"
 import { Modal } from "./BusinessUI"
+import { useBusiness } from "../businessContext"
 
 function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
+  const { businessRole } = useBusiness()
   const [confirmLogout, setConfirmLogout] = useState(false)
 
   const menuItems = [
@@ -64,6 +67,11 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       name: "Customized Buzz Points Wallet",
       path: "/wallet",
       icon: WalletCards,
+    },
+    {
+      name: "System Logs",
+      path: "/system-logs",
+      icon: ClipboardList,
     },
     {
       name: "Settings",
@@ -151,7 +159,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
       </div>
 
       {/* Navigation */}
-      <nav className="px-3">
+      <nav className="max-h-[calc(100dvh-140px)] overflow-y-auto px-3 pb-24">
         <div className="mb-4 px-2">
           <span
             className={`
@@ -166,7 +174,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
         </div>
 
         <div className="space-y-2">
-          {menuItems.map((item) => {
+          {menuItems.filter((item) => item.path !== "/system-logs" || ["OWNER", "MANAGER"].includes(businessRole)).map((item) => {
             const Icon = item.icon
 
             return (

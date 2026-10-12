@@ -24,6 +24,7 @@ import Customers from "./pages/Customers"
 import ProductsServices from "./pages/ProductsServices"
 import Reports from "./pages/Reports"
 import Settings from "./pages/Settings"
+import SystemLogs from "./pages/SystemLogs"
 import Wallet from "./pages/Wallet"
 import Content from "./pages/Content"
 import StaffPurchase from "./pages/StaffPurchase"
@@ -46,6 +47,7 @@ function App() {
 
 const ROLE_PATHS = {
   OWNER: [
+    "/system-logs",
     "/",
     "/workstations",
     "/transactions",
@@ -59,6 +61,7 @@ const ROLE_PATHS = {
   ],
 
   MANAGER: [
+    "/system-logs",
     "/",
     "/workstations",
     "/transactions",
@@ -439,6 +442,7 @@ function AppLayout({ selectedMembership, setSelectedMembership }) {
                 </ProtectedRoute>
               }
             />
+            <Route path="/system-logs" element={<ProtectedRoute allowedRoles={["OWNER", "MANAGER"]} currentUser={currentUser}><SystemLogs /></ProtectedRoute>} />
 
             <Route
               path="*"
