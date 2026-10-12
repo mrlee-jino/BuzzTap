@@ -15,7 +15,12 @@ export default function CustomerRegistration({ onClose, onRegistered }) {
   const [email, setEmail] = useState("")
   const [cardCode, setCardCode] = useState("")
   const [lookingUp, setLookingUp] = useState(false)
-  const customerCode = nextCustomerCode(customers)
+  const deletedCustomer = customers.find((customer) => customer.status === "DELETED" && (
+    mode === "NFC" && account
+      ? customer.profile_id === account.id || (!customer.profile_id && customer.email?.trim().toLowerCase() === email.trim().toLowerCase())
+      : mode === "ACCOUNT" && !customer.profile_id && customer.email?.trim().toLowerCase() === email.trim().toLowerCase()
+  ))
+  const customerCode = deletedCustomer ? deletedCustomer.customer_code || deletedCustomer.id : nextCustomerCode(customers)
 
   const changeMode = (value) => {
     setMode(value)
@@ -73,11 +78,11 @@ export default function CustomerRegistration({ onClose, onRegistered }) {
       {account && <p className="text-xs text-[#F5C400]">Linked account: {account.full_name || account.email} <button type="button" disabled={saving} onClick={() => { setAccount(null); setName(""); setEmail("") }} className="ml-2 underline">Clear</button></p>}
       <Field label="Full Name"><input className={inputClass} name="name" required value={name} readOnly={Boolean(account)} disabled={saving} onChange={(event) => setName(event.target.value)} /></Field>
       <Field label="Email"><input className={inputClass} name="email" type="email" required value={email} readOnly={Boolean(account)} disabled={saving} onChange={(event) => setEmail(event.target.value)} /></Field>
-      <Field label="Customer ID (automatic)"><input className={inputClass} name="customerCode" readOnly value={dataLoading ? "" : customerCode || ""} placeholder="Generated automatically" /><p className="mt-2 text-xs text-[#888]">Assigned when registered. The sequence starts at 001 each day.</p></Field>
+      <Field label="Customer ID (automatic)"><input className={inputClass} name="customerCode" readOnly value={dataLoading ? "" : customerCode || ""} placeholder="Generated automatically" /><p className="mt-2 text-xs text-[#888]">{deletedCustomer ? "This deleted customer will be restored with their original ID and history." : "Assigned when registered. The sequence starts at 001 each day."}</p></Field>
       {!customerCode && <p role="alert" className="text-sm text-red-300">The daily limit of 999 customer IDs has been reached.</p>}
       {dataError && <p role="alert" className="text-sm text-red-300">Customer records could not be loaded: {dataError}</p>}
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
-      <Button type="submit" disabled={saving || lookingUp || dataLoading || !!dataError || !customerCode || (mode === "NFC" && !account)}>{saving ? "Registering..." : "Register Customer"}</Button>
+      <Button type="submit" disabled={saving || lookingUp || dataLoading || !!dataError || !customerCode || (mode === "NFC" && !account)}>{saving ? "Saving..." : deletedCustomer ? "Restore Customer" : "Register Customer"}</Button>
     </form>
   </Modal>
 }

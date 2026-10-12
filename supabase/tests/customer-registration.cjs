@@ -20,6 +20,7 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
       '20261011000005_customer_account_registration.sql',
       '20261011000008_register_admin_linked_card_accounts.sql',
       '20261012000001_daily_customer_codes.sql',
+      '20261013000001_restore_deleted_customer_registration.sql',
     ]) await db.exec(fs.readFileSync(`supabase/migrations/${migration}`, 'utf8'));
 
     const business = '11111111-1111-1111-1111-111111111111';
@@ -49,10 +50,32 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
     const card = (await db.query("select * from nfc_cards where id='card-1'")).rows[0];
     assert.equal(card.customer_id, profile);
     assert.equal(card.business_id, other);
+    await db.query("update customers set status='DELETED' where id=$1", [cardCustomer.id]);
+    const restoredCardCustomer = await register('ignored@example.test', business, '400001', profile);
+    assert.equal(restoredCardCustomer.id, cardCustomer.id);
+    assert.equal(restoredCardCustomer.customer_code, cardCustomer.customer_code);
+    assert.equal(restoredCardCustomer.status, 'ACTIVE');
+    assert.equal(restoredCardCustomer.profile_id, profile);
+    assert.equal((await db.query('select count(*)::int as count from customers where business_id=$1 and profile_id=$2', [business, profile])).rows[0].count, 1);
+    await assert.rejects(register('ignored@example.test', business, '400001', profile), /already registered/);
+    await db.query("update customers set status='DELETED' where id=$1", [cardCustomer.id]);
+    await assert.rejects(register('card@example.test'), /BuzzTap NFC card/);
+    assert.equal((await db.query('select status from customers where id=$1', [cardCustomer.id])).rows[0].status, 'DELETED');
+    await register('ignored@example.test', business, '400001', profile);
+    const restoredLocal = await register('THIRD@example.test');
+    assert.equal(restoredLocal.customer_code, `${prefix}003`);
+    assert.equal(restoredLocal.status, 'ACTIVE');
+    await db.query("update customers set status='FROZEN' where id=$1", [restoredLocal.id]);
+    await assert.rejects(register('third@example.test'), /already registered/);
+    assert.equal((await db.query('select status from customers where id=$1', [restoredLocal.id])).rows[0].status, 'FROZEN');
     await assert.rejects(register('bad@example.test', business, 'missing'), /No active Customer account/);
     await assert.rejects(register('denied@example.test', '33333333-3333-3333-3333-333333333333'), /Not authorized/);
     await db.query('update customers set customer_code=$1 where id=$2', [`${prefix}999`, first.id]);
     await assert.rejects(register('overflow@example.test'), /daily limit/);
+    // Restoring a record does not consume a daily ID, even at the limit.
+    await db.query("update customers set status='DELETED' where id=$1", [cardCustomer.id]);
+    assert.equal((await register('ignored@example.test', business, '400001', profile)).id, cardCustomer.id);
+    await db.exec(fs.readFileSync('supabase/migrations/20261013000001_restore_deleted_customer_registration.sql', 'utf8'));
     console.log('Customer registration database checks passed');
   } finally { await db.close(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });
