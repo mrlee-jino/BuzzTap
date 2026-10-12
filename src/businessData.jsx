@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { supabase } from "./lib/supabaseClient"
 import { BusinessContext } from "./businessContext"
 import { useAuth } from "./context/useAuth"
+import { nextProductId } from "./lib/catalog"
 
 const emptyWallet = { purchased: 0, distributed: 0, collected: 0, pendingSettlement: 0, settled: 0, balance: 0 }
 const defaultNotifications = {
@@ -19,6 +20,7 @@ const emptyData = {
   settlementRequests: [],
   cards: [],
   products: [],
+  nextCatalogProductId: "PROD-001",
   workstations: [],
   workstationSessions: [],
   inventoryMovements: [],
@@ -148,6 +150,7 @@ export function BusinessProvider({ children, selectedMembership }) {
       setData({
         customers,
         products: (productResult.data || []).filter((item) => !item.deleted_at).map((item) => ({ ...item, price: money(item.price), stock: Number(item.stock || 0) })),
+        nextCatalogProductId: nextProductId(productResult.data || []),
         workstations: (workstationResult.data || []).map((item) => ({ ...item, rate: money(item.rate) })),
         workstationSessions: sessionResult.data || [],
         inventoryMovements: (movementResult.data || []).map((item) => ({

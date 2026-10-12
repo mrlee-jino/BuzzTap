@@ -1,12 +1,16 @@
 import { useState } from "react"
 import { Package, Plus, Search, ToggleLeft, Trash2 } from "lucide-react"
 import { useBusiness } from "../businessContext"
+import { catalogCategories } from "../lib/catalog"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 
 function ProductsServices() {
-  const { products, customers, purchase, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
+  const { products, nextCatalogProductId, customers, purchase, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
   const [query, setQuery] = useState("")
   const [modal, setModal] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState("")
+  const categories = catalogCategories(products)
   const [itemType, setItemType] = useState("PRODUCT")
   const [restockProduct, setRestockProduct] = useState(null)
   const [notice, setNotice] = useState("")
@@ -48,10 +52,16 @@ function ProductsServices() {
 
   const add = async (event) => {
     event.preventDefault()
+    if (adding || dataLoading || dataError) return
     const data = Object.fromEntries(new FormData(event.currentTarget))
-    const ok = await addProduct({ ...data, item_type: itemType, price: Number(data.price), stock: itemType === "PRODUCT" ? Number(data.stock) : 0 })
-    setNotice(ok ? "Product added successfully." : "Product save failed.")
-    if (ok) setModal(false)
+    setAdding(true)
+    setAddError("")
+    try {
+      const ok = await addProduct({ ...data, id: nextCatalogProductId, category: data.category.trim(), item_type: itemType, price: Number(data.price), stock: itemType === "PRODUCT" ? Number(data.stock) : 0 })
+      if (ok) { setNotice("Product added successfully."); setModal(false) }
+      else setAddError("Product save failed. Please try again.")
+    } catch { setAddError("Product save failed. Please try again.") }
+    finally { setAdding(false) }
   }
 
   const restock = async (event) => {
@@ -64,7 +74,7 @@ function ProductsServices() {
 
   return (
     <div className="mx-auto max-w-[1600px]">
-      <PageHeader title="Products & Services" description="Manage your catalog, prices, availability, and product stock." action={<Button onClick={() => { setItemType("PRODUCT"); setModal(true) }}><Plus size={17} />Add Item</Button>} />
+      <PageHeader title="Products & Services" description="Manage your catalog, prices, availability, and product stock." action={<Button disabled={dataLoading || !!dataError} onClick={() => { setItemType("PRODUCT"); setAddError(""); setModal(true) }}><Plus size={17} />Add Item</Button>} />
       {(notice || dataError || dataLoading) && <p role={dataError ? "alert" : "status"} className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>{dataError ? `Database error: ${dataError}` : notice || "Loading catalog…"}</p>}
       <div className={`${cardClass} mb-6 flex items-center gap-3 p-4`}>
         <Search size={17} className="text-[#666]" />
@@ -107,15 +117,17 @@ function ProductsServices() {
         {deleteError && <p role="alert" className="mt-4 text-sm text-red-300">{deleteError}</p>}
         <div className="mt-6 flex justify-end gap-3"><Button secondary disabled={deleting} onClick={() => setDeleteItem(null)}>Cancel</Button><Button disabled={deleting} onClick={confirmDelete}>{deleting ? "Deleting…" : "Confirm Delete"}</Button></div>
       </Modal>}
-      {modal && <Modal title="Add Catalog Item" onClose={() => setModal(false)}><form onSubmit={add} className="space-y-4">
+      {modal && <Modal title="Add Catalog Item" onClose={() => { if (!adding) setModal(false) }}><form onSubmit={add} className="space-y-4">
         <Field label="Item type"><select className={inputClass} value={itemType} onChange={(event) => setItemType(event.target.value)}><option value="PRODUCT">Product</option><option value="SERVICE">Service</option><option value="WORKSTATION">From Workstation</option></select></Field>
-        <Field label="Product ID"><input className={inputClass} name="id" required placeholder="PROD-004" /></Field>
+        <Field label="Product ID (automatic)"><input className={inputClass} name="id" readOnly value={dataLoading ? "" : nextCatalogProductId} placeholder="Loading ID..." /></Field>
         <Field label="Product Name"><input className={inputClass} name="name" required placeholder="Gaming Session - 1 Hour" /></Field>
         <Field label="Description"><textarea className={inputClass} name="description" required rows="2" /></Field>
-        <Field label="Category"><input className={inputClass} name="category" required placeholder="Gaming" /></Field>
+        <Field label="Category"><input className={inputClass} name="category" required placeholder="Choose or enter a category" list="catalog-categories" autoComplete="off" /></Field>
+        <datalist id="catalog-categories">{categories.map((category) => <option key={category} value={category} />)}</datalist>
         <Field label="Catalog Price (currently displayed in BP)"><input className={inputClass} name="price" type="number" min="0" required placeholder="50" /></Field>
         {itemType === "PRODUCT" && <Field label="Opening Stock Quantity"><input className={inputClass} name="stock" type="number" min="0" step="1" required defaultValue="0" /></Field>}
-        <Button type="submit">Add Item</Button>
+        {addError && <p role="alert" className="text-sm text-red-300">{addError}</p>}
+        <Button type="submit" disabled={adding || dataLoading || !!dataError}>{adding ? "Adding..." : "Add Item"}</Button>
       </form></Modal>}
       {checkout && <Modal title={`Purchase · ${checkout.name}`} onClose={() => { if (!paying) setCheckout(null) }}><form onSubmit={pay} className="space-y-4">
         <Field label="Customer"><select className={inputClass} name="customerId" required disabled={paying} defaultValue="" onChange={() => setPurchaseRequestId(crypto.randomUUID())}><option value="" disabled>Select customer</option>{customers.filter((customer) => customer.status === "ACTIVE" && customer.profileStatus === "ACTIVE" && customer.profile_id).map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.wallet ?? 0} BP</option>)}</select></Field>
