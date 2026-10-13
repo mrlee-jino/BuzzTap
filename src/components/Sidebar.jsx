@@ -16,6 +16,7 @@ import {
   Megaphone,
   ShoppingCart,
 } from "lucide-react"
+import { canAccessPage } from "../lib/businessAccess"
 import { Modal } from "./BusinessUI"
 import { useBusiness } from "../businessContext"
 
@@ -180,7 +181,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onLogout }) {
         </div>
 
         <div className="space-y-2">
-          {menuItems.filter((item) => !["/system-logs","/rebates"].includes(item.path) || ["OWNER", "MANAGER"].includes(businessRole)).map((item) => {
+          {menuItems.filter((item) => canAccessPage(businessRole, item.path)).map((item) => {
             const Icon = item.icon
 
             return (

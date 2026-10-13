@@ -10,6 +10,7 @@ import {
 import { useMemo, useState } from "react"
 import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 
+import { ROLE_PATHS } from "./lib/businessAccess"
 import Sidebar from "./components/Sidebar"
 import BusinessNotifications from "./components/BusinessNotifications"
 import { useAuth } from "./context/useAuth"
@@ -44,49 +45,6 @@ function App() {
       </BrowserRouter>
     </BusinessProvider>
   )
-}
-
-const ROLE_PATHS = {
-  OWNER: [
-    "/rebates",
-    "/system-logs",
-    "/",
-    "/workstations",
-    "/transactions",
-    "/customers",
-    "/products-services",
-    "/reports",
-    "/wallet",
-    "/settings",
-    "/content",
-    "/staff-purchase",
-  ],
-
-  MANAGER: [
-    "/rebates",
-    "/system-logs",
-    "/",
-    "/workstations",
-    "/transactions",
-    "/customers",
-    "/products-services",
-    "/reports",
-    "/wallet",
-    "/content",
-    "/staff-purchase",
-  ],
-
-  CASHIER: [
-    "/transactions",
-    "/customers",
-    "/wallet",
-    "/staff-purchase",
-  ],
-
-  STAFF: [
-    "/transactions",
-    "/staff-purchase",
-  ],
 }
 
 function AppLayout({ selectedMembership, setSelectedMembership }) {
@@ -126,7 +84,7 @@ function AppLayout({ selectedMembership, setSelectedMembership }) {
   )
 
   const currentMembership =
-    selectedMembership ||
+    activeMemberships.find(member => member.id === selectedMembership?.id) ||
     (activeMemberships.length === 1
       ? activeMemberships[0]
       : null)
@@ -331,6 +289,7 @@ function AppLayout({ selectedMembership, setSelectedMembership }) {
                   allowedRoles={[
                     "OWNER",
                     "MANAGER",
+                    "STAFF",
                   ]}
                   currentUser={currentUser}
                 >
@@ -379,6 +338,7 @@ function AppLayout({ selectedMembership, setSelectedMembership }) {
                   allowedRoles={[
                     "OWNER",
                     "MANAGER",
+                    "STAFF",
                   ]}
                   currentUser={currentUser}
                 >
@@ -421,6 +381,7 @@ function AppLayout({ selectedMembership, setSelectedMembership }) {
                   allowedRoles={[
                     "OWNER",
                     "MANAGER",
+                    "STAFF",
                   ]}
                   currentUser={currentUser}
                 >
@@ -519,7 +480,9 @@ function Login({ signIn, onLogin }) {
         const message =
           result.error?.message?.toLowerCase() || ""
 
-        if (
+        if (result.error?.code === "BUSINESS_ROLE_MISMATCH") {
+          setError(result.error.message)
+        } else if (
           message.includes("invalid login") ||
           message.includes("invalid credentials")
         ) {

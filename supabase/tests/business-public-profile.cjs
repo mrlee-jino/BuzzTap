@@ -14,18 +14,37 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
     const migration = fs.readFileSync('supabase/migrations/20261013000002_business_public_profiles.sql','utf8');
     await db.exec(migration);
     const themeMigration = fs.readFileSync('supabase/migrations/20261013000006_business_profile_theme_color.sql','utf8');
-    await db.exec(themeMigration);
     const bid = '11111111-1111-1111-1111-111111111111';
     const read = async () => (await db.query('select get_public_business_profile($1) as profile',[bid])).rows[0].profile;
     const save = async (profile) => (await db.query('select save_public_business_profile($1,$2::jsonb) as profile',[bid,JSON.stringify(profile)])).rows[0].profile;
-    assert.equal((await read()).display_name,'Test Shop');
+    const { savePublicBusinessProfile } = await import('../../src/lib/businessProfile.js');
+    const client = { rpc: async (name,args) => {
+      try { return { data: name==='save_public_business_profile' ? await save(args.p_profile) : await read(),error:null }; }
+      catch(error) { return { data:null,error }; }
+    } };
     assert.equal((await read()).email,undefined);
+    // Reproduce the legacy behavior: save succeeds but loses green.
+    await assert.rejects(savePublicBusinessProfile(client,bid,{display_name:'Test Shop',theme_color:'#16A34A'}),/theme color was not saved/);
+    assert.equal((await read()).theme_color,undefined);
+    await db.exec(themeMigration);
+    const repairMigration = fs.readFileSync('supabase/migrations/20261013000013_fix_profile_theme_persistence.sql','utf8');
+    await db.exec(repairMigration);
+    assert.equal((await read()).display_name,'Test Shop');
+    assert.equal((await read()).email,'');
     assert.equal((await read()).theme_color,'#F5C400');
     const profile = { display_name:'Public Shop',about:'Welcome',logo_url:'https://example.test/logo.png',website:'https://example.test',email:'public@example.test',business_id:'injected',status:'injected' };
     assert.equal((await save(profile)).business_id,bid);
     assert.equal((await read()).email,'public@example.test');
     assert.equal((await read()).status,undefined);
     assert.equal((await save({...profile,theme_color:'#16a34a'})).theme_color,'#16A34A');
+    assert.equal((await read()).theme_color,'#16A34A');
+    // Fresh reads simulate returning to the Content page or refreshing it.
+    assert.equal((await savePublicBusinessProfile(client,bid,{...profile,theme_color:'#16a34a'})).theme_color,'#16A34A');
+    assert.equal((await read()).theme_color,'#16A34A');
+    // Older clients saving contact/profile details must preserve the color.
+    await save({...profile,about:'Updated details without a theme field'});
+    assert.equal((await read()).theme_color,'#16A34A');
+    await db.exec(repairMigration);
     assert.equal((await read()).theme_color,'#16A34A');
     await assert.rejects(save({...profile,theme_color:'red'}),/six-digit hex/);
     await assert.rejects(save({...profile,theme_color:'#123'}),/six-digit hex/);
@@ -48,6 +67,7 @@ const { PGlite } = require('../../.tmp/db-tools/node_modules/@electric-sql/pglit
     await assert.rejects(read(),/Sign in/);
     await db.exec(migration);
     await db.exec(themeMigration);
-    console.log('Business public profile checks passed: persistence, public fields, protected edits, URL validation, repeat migration.');
+    await db.exec(repairMigration);
+    console.log('Business public profile checks passed: legacy theme loss reproduced, green persists on reload, older-client saves preserve color, protected edits, validation, repeat migration.');
   } finally { await db.close(); }
 })().catch((error) => { console.error(error); process.exitCode=1; });

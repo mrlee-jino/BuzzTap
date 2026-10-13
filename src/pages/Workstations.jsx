@@ -7,6 +7,7 @@ import { formatRemaining, sessionCustomerName, sessionRemaining } from "../lib/s
 
 function Workstations() {
   const {
+    businessRole,
     workstations,
     workstationSessions,
     customers,
@@ -16,6 +17,7 @@ function Workstations() {
     dataLoading,
     dataError,
   } = useBusiness()
+  const canManage = ["OWNER", "MANAGER"].includes(businessRole)
   const [query, setQuery] = useState("")
   const [modal, setModal] = useState(false)
   const [notice, setNotice] = useState("")
@@ -91,7 +93,7 @@ function Workstations() {
 
   return (
     <div className="mx-auto max-w-[1600px]">
-      <PageHeader title="Workstations" description="Monitor stations, devices, availability, and recorded customer sessions." action={<Button onClick={() => setModal(true)}><Plus size={17} />Add Workstation</Button>} />
+      <PageHeader title="Workstations" description="Monitor stations, devices, availability, and recorded customer sessions." action={canManage && <Button onClick={() => setModal(true)}><Plus size={17} />Add Workstation</Button>} />
       {(notice || dataError || dataLoading) && (
         <p role={dataError ? "alert" : "status"} className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>
           {dataError ? `Database error: ${dataError}` : notice || "Loading workstation records…"}
@@ -121,14 +123,14 @@ function Workstations() {
                 <p role="timer" aria-label="Remaining session time" className={`mt-1 font-mono text-xl font-semibold tabular-nums ${sessionRemaining(activeSession, now) === 0 ? "text-red-300" : "text-[#F5C400]"}`}>{formatRemaining(sessionRemaining(activeSession, now))}</p>
                 {activeSession && <p className="mt-2 text-xs text-[#AAA]">Started {new Date(activeSession.started_at).toLocaleString()}</p>}
               </div>}
-              <div className="mt-5 flex flex-wrap gap-2 border-t border-[#242424] pt-4">
+              {canManage && <div className="mt-5 flex flex-wrap gap-2 border-t border-[#242424] pt-4">
                 {item.status === "ACTIVE" && <button disabled={busyId === item.id} onClick={() => { setRequestId(crypto.randomUUID()); setSessionStation(item); setCustomerType("REGISTERED"); setPaymentMethod("CASH"); setSessionError("") }} className="rounded-lg bg-[#F5C400] px-3 py-2 text-xs font-semibold text-black disabled:opacity-50"><Clock3 size={14} className="mr-1 inline" />Start Session</button>}
                 {item.status === "IN_USE" && <button disabled={Boolean(busyId) || !activeSession} onClick={() => { setEndStation(item); setEndError("") }} className="rounded-lg bg-[#F5C400] px-3 py-2 text-xs font-semibold text-black disabled:opacity-50">End Session</button>}
                 {item.status !== "IN_USE" && item.status !== "DISABLED" && item.status !== "MAINTENANCE" && <button onClick={() => change(item, "MAINTENANCE")} title="Set maintenance" className="rounded-lg bg-[#1d1d1d] p-2 text-[#AAA]"><Wrench size={15} /></button>}
                 {item.status === "DISABLED" || item.status === "MAINTENANCE"
                   ? <button onClick={() => change(item, "ACTIVE")} className="rounded-lg bg-[#1d1d1d] px-3 py-2 text-xs text-white">Enable</button>
                   : item.status !== "IN_USE" && <button onClick={() => change(item, "DISABLED")} title="Disable workstation" className="rounded-lg bg-[#1d1d1d] p-2 text-red-400"><Settings2 size={15} /></button>}
-              </div>
+              </div>}
             </div>
           )
         }) : <div className={`${cardClass} text-center text-sm text-[#666]`}>{dataLoading ? "Loading workstations…" : "No workstations found."}</div>}

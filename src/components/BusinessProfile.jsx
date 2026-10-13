@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient"
 import { Button, Field, cardClass, inputClass } from "./BusinessUI"
 import { PROFILE_IMAGE_BUCKET, PROFILE_IMAGE_TYPES, validateProfileImage } from "../lib/profileImages"
 import { PROFILE_COLORS, profileTheme } from "../lib/profileTheme"
+import { savePublicBusinessProfile } from "../lib/businessProfile"
 
 const fields = [
   ["display_name", "Business display name"], ["business_type", "Business category"],
@@ -56,8 +57,7 @@ export default function BusinessProfile({ business, role, onProfileChange }) {
     if (saving || loading || uploading || !canEdit) return
     setSaving(true); setError(""); setNotice("")
     try {
-      const { data, error: failure } = await supabase.rpc("save_public_business_profile", { p_business_id: business.id, p_profile: profile })
-      if (failure) throw failure
+      const data = await savePublicBusinessProfile(supabase, business.id, profile)
       setProfile(data)
       onProfileChange?.(data)
       setNotice("Business profile saved. These details are available to the customer application.")

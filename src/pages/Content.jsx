@@ -125,6 +125,7 @@ function BusinessAvatar({ name, logo }) {
 
 function Content() {
   const { activities = [], dataLoading, dataError, addActivity, business, businessRole } = useBusiness()
+  const canManage = ["OWNER", "MANAGER"].includes(businessRole)
   const [query, setQuery] = useState("")
   const [businessProfile, setBusinessProfile] = useState(null)
   const ownProfile = businessProfile?.business_id === business?.id ? businessProfile : null
@@ -240,7 +241,7 @@ function Content() {
     ? [...(previewDraft && myPostsMode === "RUNNING" ? [previewDraft] : []), ...ownFeedPosts]
     : runningCommunityPosts
   const editorCanSubmit = !editor?.id || ["DRAFT", "REJECTED"].includes(String(editor.status).toUpperCase())
-  const canEdit = (item) => ["DRAFT", "REJECTED"].includes(String(item.status).toUpperCase())
+  const canEdit = (item) => canManage && ["DRAFT", "REJECTED"].includes(String(item.status).toUpperCase())
 
   const openCreateForm = () => {
     setEditor(null)
@@ -375,8 +376,8 @@ function Content() {
       <PageHeader
         eyebrow="CONTENT WORKFLOW"
         title="Business Content"
-        description="Manage your drafts and submissions, preview the BuzzTap feed, and create a post."
-        action={<Button onClick={openCreateForm}><Plus size={17} />Create Post</Button>}
+        description={canManage ? "Manage your drafts and submissions, preview the BuzzTap feed, and create a post." : "Browse business posts, submissions, and the BuzzTap community feed."}
+        action={canManage && <Button onClick={openCreateForm}><Plus size={17} />Create Post</Button>}
       />
 
       {(notice || dataError) && (
@@ -402,7 +403,7 @@ function Content() {
       </div>
 
       {business && <BusinessProfile key={business.id} business={business} role={businessRole} onProfileChange={setBusinessProfile} />}
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(330px,1.3fr)_minmax(400px,0.95fr)_minmax(340px,1fr)]">
+      <div className={`grid items-start gap-5 ${canManage ? "xl:grid-cols-[minmax(330px,1.3fr)_minmax(400px,0.95fr)_minmax(340px,1fr)]" : "xl:grid-cols-2"}`}>
         <section className={`${cardClass} overflow-hidden p-0`} aria-label="Drafts and submissions">
           <header className="border-b border-[#252525] px-4 py-4 sm:px-5">
             <h2 className="font-semibold text-white">Drafts &amp; submissions</h2>
@@ -430,7 +431,7 @@ function Content() {
                     : <p className="truncate text-sm font-semibold text-white">{item.title}</p>}
                   <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-[#777]">{item.type || "UPDATE"}{item.contentId ? ` · ${item.contentId}` : ""}</p>
                   <p className="mt-1 text-[10px] text-[#666] sm:hidden">{formatDate(item.created_at?.slice(0, 10) || item.startDate)}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  {canManage && <div className="mt-2 flex flex-wrap gap-1.5">
                     {canEdit(item) && <>
                       <button type="button" onClick={() => edit(item)} className="text-[10px] text-[#aaa] hover:text-white">Edit</button>
                       <span className="text-[10px] text-[#444]">·</span>
@@ -453,7 +454,7 @@ function Content() {
                         }} disabled={busyId === item.id} className="text-[10px] font-semibold text-[#F5C400] hover:text-[#FFD83D] disabled:opacity-50">Submit</button>
                       </>
                     )}
-                  </div>
+                  </div>}
                 </div>
                 <StatusBadge status={item.viewStatus} />
                 <span className="hidden whitespace-nowrap text-[10px] text-[#777] sm:block">{formatDate(item.created_at?.slice(0, 10) || item.startDate)}</span>
@@ -544,7 +545,7 @@ function Content() {
           <p className="mt-3 text-center text-[10px] leading-4 text-[#666]">{feedMode === "MINE" && myPostsMode === "ARCHIVE" ? "Your archived and expired posts are kept here for reference." : "Only posts published by Admin Web appear in this feed."}</p>
         </section>
 
-        <section ref={formPanel} className={`${cardClass} scroll-mt-6 p-4 sm:p-5`} aria-label="Create BuzzTap post">
+        {canManage && <section ref={formPanel} className={`${cardClass} scroll-mt-6 p-4 sm:p-5`} aria-label="Create BuzzTap post">
           <header className="mb-4 border-b border-[#292929] pb-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-semibold text-white">{editor ? "Edit Post" : "Create BuzzTap post"}</h2>
@@ -577,7 +578,7 @@ function Content() {
             </div>
             <p className="text-[10px] leading-4 text-[#666]">Businesses can submit posts and manage drafts. Admin Web alone can approve and publish them to the community feed.</p>
           </form>
-        </section>
+        </section>}
       </div>
     </div>
   )

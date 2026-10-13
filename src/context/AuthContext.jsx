@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { AuthContext } from "./AuthContextValue"
+import { matchingBusinessMemberships } from "../lib/businessAccountRole"
 
 async function recordAccessEvents(userId, memberships, event) {
   const rows = (memberships || [])
@@ -108,7 +109,17 @@ export function AuthProvider({ children }) {
       }
     }
 
-    const activeMemberships = membershipData || []
+    const activeMemberships = matchingBusinessMemberships(profileData, membershipData)
+    if ((membershipData || []).length && !activeMemberships.length) {
+      const roleError = new Error(profileData.status !== "ACTIVE"
+        ? "This business account is inactive. Contact your business owner."
+        : "Your profile role does not match your business membership. Contact your business owner to correct the account role.")
+      roleError.code = "BUSINESS_ROLE_MISMATCH"
+      setError(roleError.message)
+      setProfile(null)
+      setMemberships([])
+      return { profile: profileData, memberships: [], error: roleError }
+    }
 
     setMemberships(activeMemberships)
 

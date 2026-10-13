@@ -104,7 +104,7 @@ export function BusinessProvider({ children, selectedMembership }) {
         supabase.from("workstation_sessions").select("*").eq("business_id", bid).order("started_at", { ascending: false }),
         supabase.from("product_inventory_movements").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("business_preferences").select("notifications").eq("business_id", bid).maybeSingle(),
-        ["OWNER", "MANAGER", "CASHIER"].includes(businessRole)
+        ["OWNER", "MANAGER", "CASHIER", "STAFF"].includes(businessRole)
           ? supabase.rpc("get_business_shared_bp", { p_business_id: bid })
           : Promise.resolve({ data: { customers: [], business_balance: null }, error: null }),
         supabase.from("business_customized_bp_wallets").select("*").eq("business_id",bid),

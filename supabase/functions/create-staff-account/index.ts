@@ -75,7 +75,7 @@ serve(async (request) => {
       full_name: name,
       email,
       phone,
-      role: "BUSINESS_OWNER",
+      role,
       status: "ACTIVE",
     })
     if (profileError) {

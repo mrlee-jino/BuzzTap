@@ -7,6 +7,8 @@ import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from 
 
 function ProductsServices() {
   const { products, nextCatalogProductId, purchase, checkoutProduct, addProduct, updateProductStatus, updateProductType, deleteProduct, restockInventory, businessRole, dataLoading, dataError } = useBusiness()
+  const canManage = ["OWNER", "MANAGER"].includes(businessRole)
+  const canPurchase = ["OWNER", "MANAGER", "CASHIER"].includes(businessRole)
   const [query, setQuery] = useState("")
   const [modal, setModal] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -76,7 +78,7 @@ function ProductsServices() {
 
   return (
     <div className="mx-auto max-w-[1600px]">
-      <PageHeader title="Products & Services" description="Manage your catalog, prices, availability, and product stock." action={<Button disabled={dataLoading || !!dataError} onClick={() => { setItemType("PRODUCT"); setAddError(""); setModal(true) }}><Plus size={17} />Add Item</Button>} />
+      <PageHeader title="Products & Services" description={canManage ? "Manage your catalog, prices, availability, and product stock." : "Browse your catalog, prices, availability, and product stock."} action={canManage && <Button disabled={dataLoading || !!dataError} onClick={() => { setItemType("PRODUCT"); setAddError(""); setModal(true) }}><Plus size={17} />Add Item</Button>} />
       {(notice || dataError || dataLoading) && <p role={dataError ? "alert" : "status"} className={`mb-5 rounded-xl border p-3 text-sm ${dataError ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-[#F5C400]/30 bg-[#F5C400]/10 text-[#F5C400]"}`}>{dataError ? `Database error: ${dataError}` : notice || "Loading catalog…"}</p>}
       <div className={`${cardClass} mb-6 flex items-center gap-3 p-4`}>
         <Search size={17} className="text-[#666]" />
@@ -92,22 +94,22 @@ function ProductsServices() {
             <p className="mt-6 text-xs text-[#666]">{product.id} · {product.category}</p>
             <h2 className="mt-2 text-xl font-semibold text-white">{product.name}</h2>
             <p className="mt-2 text-sm text-[#777]">{product.description}</p>
-            <Field label="Item type"><select className={`${inputClass} mt-2 mb-3`} value={product.item_type || "PRODUCT"} onChange={async (event) => {
+            <Field label="Item type"><select disabled={!canManage} className={`${inputClass} mt-2 mb-3`} value={product.item_type || "PRODUCT"} onChange={async (event) => {
               const ok = await updateProductType(product.id, event.target.value)
               setNotice(ok ? `${product.name} item type updated.` : "Item type update failed.")
             }}><option value="PRODUCT">Product</option><option value="SERVICE">Service</option><option value="WORKSTATION">From Workstation</option></select></Field>
-            {(product.item_type || "PRODUCT") === "PRODUCT" && product.status === "ACTIVE" && <Button secondary disabled={!product.stock} onClick={() => { setCheckout(product); setPurchaseRequestId(crypto.randomUUID()); setPaymentError("") }}>Customer points purchase</Button>}
+            {canPurchase && (product.item_type || "PRODUCT") === "PRODUCT" && product.status === "ACTIVE" && <Button secondary disabled={!product.stock} onClick={() => { setCheckout(product); setPurchaseRequestId(crypto.randomUUID()); setPaymentError("") }}>Customer points purchase</Button>}
             <div className="mt-6 flex items-center justify-between border-t border-[#242424] pt-4">
               <div>
                 <span className="text-xl font-bold text-[#F5C400]">{product.price} BP</span>
                 {(product.item_type || "PRODUCT") === "PRODUCT" && <p className="mt-1 text-xs text-[#777]">{product.stock} in stock</p>}
               </div>
               <div className="flex items-center gap-2">
-                {(product.item_type || "PRODUCT") === "PRODUCT" && <button onClick={() => setRestockProduct(product)} disabled={product.status !== "ACTIVE"} className="rounded-lg bg-[#1d1d1d] px-3 py-2 text-xs text-[#AAA] disabled:opacity-50">Restock</button>}
-                <button title="Toggle availability" onClick={async () => {
+                {canManage && (product.item_type || "PRODUCT") === "PRODUCT" && <button onClick={() => setRestockProduct(product)} disabled={product.status !== "ACTIVE"} className="rounded-lg bg-[#1d1d1d] px-3 py-2 text-xs text-[#AAA] disabled:opacity-50">Restock</button>}
+                {canManage && <button title="Toggle availability" onClick={async () => {
                   const ok = await updateProductStatus(product.id, product.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")
                   setNotice(ok ? `${product.name} availability updated.` : "Product status update failed.")
-                }} className="rounded-lg p-2 text-[#777] hover:bg-[#222] hover:text-white"><ToggleLeft size={20} /></button>
+                }} className="rounded-lg p-2 text-[#777] hover:bg-[#222] hover:text-white"><ToggleLeft size={20} /></button>}
                 {["OWNER", "MANAGER"].includes(businessRole) && <button type="button" title="Delete item" aria-label={`Delete ${product.name}`} onClick={() => { setDeleteItem(product); setDeleteError("") }} className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"><Trash2 size={18} /></button>}
               </div>
             </div>
