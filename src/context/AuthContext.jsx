@@ -1,21 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { AuthContext } from "./AuthContextValue"
 import { matchingBusinessMemberships } from "../lib/businessAccountRole"
-
-async function recordAccessEvents(userId, memberships, event) {
-  const rows = (memberships || [])
-    .filter((membership) => membership.business_id)
-    .map((membership) => ({
-      business_id: membership.business_id,
-      user_id: userId,
-      event,
-    }))
-
-  if (rows.length) {
-    await supabase.from("business_access_logs").insert(rows)
-  }
-}
+import { recordBusinessAccess, signOutWithBusinessAccess } from "../lib/businessAccessLog"
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
@@ -24,6 +11,7 @@ export function AuthProvider({ children }) {
   const [memberships, setMemberships] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const signOutAttempt = useRef(null)
 
   async function loadUserData(authUser) {
     if (!authUser) {
@@ -154,13 +142,9 @@ export function AuthProvider({ children }) {
 
       if (result.error) {
         setError(result.error.message)
-      } else if (currentSession?.user) {
-        await recordAccessEvents(
-          currentSession.user.id,
-          result.memberships,
-          "LOGIN",
-        )
       }
+
+      // Restoring a saved session (including reloads and new tabs) is not a login.
 
       setLoading(false)
     }
@@ -219,7 +203,7 @@ export function AuthProvider({ children }) {
       }
     }
 
-    await recordAccessEvents(data.user.id, result.memberships, "LOGIN")
+    await recordBusinessAccess(supabase, data.user.id, result.memberships, "LOGIN")
 
     return {
       success: true,
@@ -273,12 +257,16 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function signOut() {
+  function signOut() {
+    if (signOutAttempt.current) return signOutAttempt.current
+    signOutAttempt.current = performSignOut().finally(() => { signOutAttempt.current = null })
+    return signOutAttempt.current
+  }
+
+  async function performSignOut() {
     setError(null)
 
-    await recordAccessEvents(user?.id, memberships, "LOGOUT")
-
-    const { error: signOutError } = await supabase.auth.signOut()
+    const { error: signOutError } = await signOutWithBusinessAccess(supabase, session, memberships)
 
     if (signOutError) {
       setError(signOutError.message)
