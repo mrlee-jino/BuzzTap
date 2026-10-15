@@ -89,7 +89,7 @@ export function BusinessProvider({ children, selectedMembership }) {
     const bid = business.id
     try {
       const queries = await Promise.all([
-        supabase.from("customers").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
+        supabase.from("customers").select("id,business_id,name,email,status,created_at,updated_at,profile_id,customer_code").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("products_services").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.from("workstations").select("*").eq("business_id", bid).order("created_at", { ascending: false }),
         supabase.rpc("get_registered_customer_cards", { p_business_id: bid }),
@@ -107,7 +107,9 @@ export function BusinessProvider({ children, selectedMembership }) {
         ["OWNER", "MANAGER", "CASHIER", "STAFF"].includes(businessRole)
           ? supabase.rpc("get_business_shared_bp", { p_business_id: bid })
           : Promise.resolve({ data: { customers: [], business_balance: null }, error: null }),
-        supabase.from("business_customized_bp_wallets").select("*").eq("business_id",bid),
+        ["OWNER", "MANAGER"].includes(businessRole)
+          ? supabase.from("business_customized_bp_wallets").select("*").eq("business_id",bid)
+          : Promise.resolve({ data: [], error: null }),
         supabase.from("business_customized_bp_ledger").select("*").eq("business_id",bid).order("created_at",{ascending:false}),
       ])
       const failure = queries.slice(0,16).find((result) => result.error)
@@ -125,12 +127,12 @@ export function BusinessProvider({ children, selectedMembership }) {
       const ledger = ledgerResult.data || []
       const completedLedger = ledger.filter((item) => String(item.status || "").toUpperCase() === "COMPLETED")
       const customerBalances = Object.fromEntries((sharedWalletResult.data?.customers || [])
-        .map((item) => [item.id, { balance: item.balance == null ? null : money(item.balance), profileStatus: item.profile_status }]))
+        .map((item) => [item.id, { profileStatus: item.profile_status }]))
       const customers = (customerResult.data || []).map((item) => ({
         ...item,
-        wallet: customerBalances[item.id]?.balance ?? null,
+        wallet: null,
         profileStatus: customerBalances[item.id]?.profileStatus,
-        customizedBalance: Number((customizedWalletResult.data || []).find((wallet) => wallet.profile_id === item.profile_id)?.balance || 0),
+        customizedBalance: (customizedWalletResult.data || []).find((wallet) => wallet.profile_id === item.profile_id)?.balance ?? null,
         card: (cardResult.data || []).find((card) => card.customer_id === item.id && card.status === "ACTIVE")?.card_code || null,
       }))
       const walletTotals = completedLedger.reduce((result, item) => {
@@ -285,19 +287,34 @@ export function BusinessProvider({ children, selectedMembership }) {
     await loadData()
     return true
   }
-  const purchase = async ({ customerId, productId, quantity, requestId }) => {
+  const requestCustomerPayment = async (details) => {
+    const { data: paymentRequest, error } = await supabase.rpc("request_customer_payment", {
+      p_business_id: business.id, p_customer_id: details.customerId,
+      p_kind: details.kind, p_payment_method: details.paymentMethod,
+      p_product_id: details.productId || null, p_quantity: details.quantity ?? null,
+      p_workstation_id: details.workstationId || null, p_amount: details.amount ?? null,
+      p_request_id: details.requestId,
+    }).single()
+    if (error) return { success: false, error: error.message }
+    if (paymentRequest.state === "CAPTURED") return captureCustomerPayment(paymentRequest.id)
+    if (!["PENDING", "APPROVED"].includes(paymentRequest.state)) {
+      return { success: false, error: "This payment request was declined or cancelled. Start a new checkout if the customer wants to try again." }
+    }
+    return { success: true, pendingApproval: true, paymentRequest }
+  }
+  const captureCustomerPayment = async (requestId) => {
     if (!business?.id) return { success: false, error: "No active business is available." }
-    const { data, error } = await supabase.rpc("purchase_shared_product", {
-      p_business_id: business.id, p_customer_id: customerId, p_product_id: productId,
-      p_quantity: quantity, p_request_id: requestId,
-    })
+    const { data: paymentRequest, error } = await supabase.rpc("capture_customer_payment", { p_request_id: requestId }).single()
     if (error) return { success: false, error: error.message }
     await loadData()
-    setReceiptRequest({ kind: "TRANSFER", id: data, autoPrint: true })
-    return { success: true, id: data }
+    setReceiptRequest({ kind: paymentRequest.kind === "WORKSTATION" ? "SESSION" : "TRANSACTION",
+      id: paymentRequest.session_id || paymentRequest.transaction_id, autoPrint: true })
+    return { success: true, paymentRequest }
   }
+  const purchase = (details) => checkoutProduct({ ...details, paymentMethod: "BUZZPOINTS" })
   const checkoutProduct = async (details) => {
     if (!business?.id) return { success: false, error: "No active business is available." }
+    if (details.paymentMethod !== "CASH") return requestCustomerPayment({ ...details, kind: "PRODUCT" })
     const { data: id, error } = await supabase.rpc("checkout_product_purchase", {
       p_business_id: business.id, p_product_id: details.productId, p_quantity: details.quantity,
       p_customer_id: details.customerId || null, p_guest_name: details.guestName || null,
@@ -444,6 +461,9 @@ export function BusinessProvider({ children, selectedMembership }) {
   }
   const changeWorkstationSession = async (workstationId, action, details = {}) => {
     if (!business?.id) return { success: false, error: "No active business is available." }
+    if (action === "START" && details.paymentMethod !== "CASH") {
+      return requestCustomerPayment({ ...details, workstationId, kind: "WORKSTATION" })
+    }
     const { data: sessionId, error } = await supabase.rpc(
       action === "START" ? "start_timed_workstation_session" : "end_workstation_session",
       { p_business_id: business.id, p_workstation_id: workstationId,
@@ -496,10 +516,10 @@ export function BusinessProvider({ children, selectedMembership }) {
     <BusinessContext.Provider value={{
       user, profile, memberships, activeMemberships, currentMembership, business, businessRole,
       isAuthenticated, authLoading, authError, dataLoading, dataError, refreshBusinessData: loadData,
-      ...data, wallet, finance, financeAudit, showReceipt: (id) => setReceiptRequest({ kind: "TRANSACTION", id, autoPrint: false }), authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
+      ...data, wallet, finance, financeAudit, showReceipt: (id, kind = "TRANSACTION") => setReceiptRequest({ kind, id, autoPrint: false }), authenticateStaff, loadPoints, purchase, checkoutProduct, refund, addActivity, addCustomer,
       updateCustomerStatus, addCard, assignCard, replaceCard, updateCardStatus, addProduct, updateProductStatus, updateProductType, deleteProduct,
       addWorkstation, updateWorkstationStatus, addStaff, updateStaffStatus, deleteStaff, purchaseInventory,
-      requestPurchase, requestSettlement, saveBusinessSettings, changeWorkstationSession,
+      requestPurchase, requestSettlement, saveBusinessSettings, changeWorkstationSession, captureCustomerPayment,
       issueInventory, restockInventory,
     }}>
       {children}

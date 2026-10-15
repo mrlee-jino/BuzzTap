@@ -1,5 +1,7 @@
 # BuzzTap finance terms
 
+For the new customer approval requirement, wallet privacy, app integration and platform admin controls, see [Customer payment approval handoff](customer-payment-approval-handoff.md). That migration must be coordinated with the customer app release; it is not yet deployed.
+
 | Term | Meaning |
 | --- | --- |
 | Cash sale | Actual catalog sale amount retained by the business. Cash tender and change are separate receipt fields. |

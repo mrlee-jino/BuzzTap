@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Clock3, Monitor, Plus, Search, Settings2, Wrench } from "lucide-react"
 import { useBusiness } from "../businessContext"
 import PaymentCustomer from "../components/PaymentCustomer"
+import CustomerPaymentRequests from "../components/CustomerPaymentRequests"
 import { Button, Field, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 import { formatRemaining, sessionCustomerName, sessionRemaining } from "../lib/sessionTiming"
 
@@ -52,7 +53,7 @@ function Workstations() {
         paymentMethod, amount: Number(data.amount), requestId,
       })
       if (result.success) {
-        setNotice(`Session started for ${sessionStation.name}.`)
+        setNotice(result.pendingApproval ? "Payment request sent. After the customer approves in the BuzzTap app, complete payment below to start the session." : `Session started for ${sessionStation.name}.`)
         setSessionStation(null)
       } else setSessionError(result.error)
     } catch { setSessionError("Session could not be started. Please try again.") }
@@ -135,6 +136,7 @@ function Workstations() {
           )
         }) : <div className={`${cardClass} text-center text-sm text-[#666]`}>{dataLoading ? "Loading workstations…" : "No workstations found."}</div>}
       </div>
+      <CustomerPaymentRequests kind="WORKSTATION" />
       {sessionStation && <Modal title={`Start Session · ${sessionStation.name}`} onClose={() => { if (!busyId) setSessionStation(null) }}><form onSubmit={startSession} className="space-y-4">
         <Field label="Payment method"><select className={inputClass} value={paymentMethod} disabled={Boolean(busyId)} onChange={(event) => { setPaymentMethod(event.target.value); setRequestId(crypto.randomUUID()) }}><option value="CASH">Cash</option>{customerType === "REGISTERED" && <><option value="BUZZPOINTS">BuzzPoints (shared BP)</option><option value="CUSTOMIZED">Customized BuzzPoints (this business)</option></>}</select></Field>
         <Field label="User Account"><select className={inputClass} value={customerType} disabled={Boolean(busyId)} onChange={(event) => { setRequestId(crypto.randomUUID()); setCustomerType(event.target.value); setPaymentMethod("CASH") }}><option value="REGISTERED">Registered customer</option><option value="GUEST">Non-registered customer</option></select></Field>
@@ -143,7 +145,7 @@ function Workstations() {
         <p className="text-xs text-[#AAA]">Session time is calculated automatically from the amount paid at {sessionStation.rate} {paymentMethod === "CASH" ? "cash" : paymentMethod === "CUSTOMIZED" ? "CBP" : "BP"}/hour.</p>
         <Field label={`Amount purchased (${paymentMethod === "CASH" ? "cash" : paymentMethod === "CUSTOMIZED" ? "CBP" : "BP"})`}><input className={inputClass} name="amount" required type="number" min={paymentMethod !== "CASH" ? "1" : "0.01"} step={paymentMethod !== "CASH" ? "1" : "0.01"} onChange={() => setRequestId(crypto.randomUUID())} disabled={Boolean(busyId)} placeholder="Enter amount" /></Field>
         {sessionError && <p role="alert" className="text-sm text-red-300">{sessionError}</p>}
-        <Button type="submit" disabled={Boolean(busyId)}>{busyId ? "Starting…" : "Confirm and Start Session"}</Button>
+        <Button type="submit" disabled={Boolean(busyId)}>{busyId ? "Processing…" : paymentMethod === "CASH" ? "Confirm and Start Session" : "Request customer approval"}</Button>
       </form></Modal>}
       {endStation && <Modal title={`End Session · ${endStation.name}`} onClose={() => { if (!busyId) setEndStation(null) }}>
         <div role="alertdialog" aria-modal="true" aria-label={`End session for ${endStation.name}`} aria-describedby="end-session-description" className="space-y-4">

@@ -3,6 +3,7 @@ import { Eye, Printer, Receipt, RotateCcw, Search } from "lucide-react"
 import { useBusiness } from "../businessContext"
 import { Button, Modal, PageHeader, Status, cardClass, inputClass } from "../components/BusinessUI"
 import FinanceSummary from "../components/FinanceSummary"
+import CustomerPaymentDisputes from "../components/CustomerPaymentDisputes"
 import { paymentMethod, paymentUnit, formatAmount, isRefund, summarizeFinance } from "../lib/businessFinance"
 
 const statuses = ["ALL", "COMPLETED", "PENDING", "FAILED", "REFUNDED"]
@@ -99,6 +100,7 @@ function Transactions() {
           </table>
         </div>
       </div>
+      <CustomerPaymentDisputes />
       {selectedTransaction && (
         <Modal title="Transaction details" onClose={() => setSelectedTransaction(null)}>
           <dl className="space-y-3 text-sm">

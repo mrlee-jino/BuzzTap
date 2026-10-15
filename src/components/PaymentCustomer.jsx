@@ -35,20 +35,20 @@ export default function PaymentCustomer({ disabled = false, allowTap = true, lin
   return <div className="space-y-3">
     {allowTap && <div className="grid grid-cols-2 gap-2" role="group" aria-label="Customer identification method">
       <Button secondary={mode !== "MANUAL"} disabled={disabled} onClick={() => { reset(); setMode("MANUAL") }}>Select account</Button>
-      <Button secondary={mode !== "TAP"} disabled={disabled} onClick={() => { reset(); setMode("TAP") }}><CreditCard size={16} />TapToPay</Button>
+      <Button secondary={mode !== "TAP"} disabled={disabled} onClick={() => { reset(); setMode("TAP") }}><CreditCard size={16} />Find by NFC card</Button>
     </div>}
     {mode === "TAP" && allowTap && <>
       <Field label="Tap NFC card"><input autoFocus className={inputClass} value={code} disabled={disabled} autoComplete="off" maxLength={160} onChange={(event) => { reset(); setCode(event.target.value) }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); lookup() } }} placeholder="Tap on the reader or enter the card code" /></Field>
-      <p className="text-xs leading-5 text-[#AAA]">Click the card field, then tap a card on a reader that types the card code. Enter finds the linked account. Review the customer before confirming payment.</p>
+      <p className="text-xs leading-5 text-[#AAA]">Click the card field, then tap a card on a reader that types the card code. Enter finds the linked account. The card identifies the account. The customer must approve points payments in their BuzzTap app.</p>
       <Button secondary disabled={disabled || lookingUp || !code.trim()} onClick={lookup}>{lookingUp ? "Finding account..." : "Find linked account"}</Button>
     </>}
     <Field label={mode === "TAP" && allowTap ? "Linked customer account" : "Customer"}>
       <select className={inputClass} name="customerId" required value={customer?.id || ""} disabled={disabled} onChange={(event) => { setSelected(event.target.value); onChange?.() }}>
         <option value="" disabled>{mode === "TAP" && allowTap ? "Tap a registered card to find the account" : "Select customer"}</option>
-        {(mode === "TAP" && allowTap ? customer ? [customer] : [] : eligible).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.email} · {item.wallet == null ? "BP unavailable" : `${item.wallet} BP`} · {item.customizedBalance || 0} CBP here</option>)}
+        {(mode === "TAP" && allowTap ? customer ? [customer] : [] : eligible).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.customer_code || item.id}</option>)}
       </select>
     </Field>
-    {mode === "TAP" && customer && <p role="status" className="rounded-lg border border-[#F5C400]/30 bg-[#F5C400]/5 p-3 text-sm text-[#F5C400]">{customer.name} · {customer.email}<br />Available: {customer.wallet ?? 0} shared BP · {customer.customizedBalance || 0} CBP at this business. Confirm below to pay.</p>}
+    {mode === "TAP" && customer && <p role="status" className="rounded-lg border border-[#F5C400]/30 bg-[#F5C400]/5 p-3 text-sm text-[#F5C400]">{customer.name}<br />Account identified. Send the payment request for customer approval.</p>}
     {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
   </div>
 }
